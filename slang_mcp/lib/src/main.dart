@@ -13,13 +13,13 @@ import 'package:slang/src/builder/builder/translation_model_list_builder.dart';
 import 'package:slang/src/builder/model/i18n_locale.dart';
 
 // ignore: implementation_imports
-import 'package:slang/src/runner/analyze.dart';
+import 'package:slang_cli/src/runner/analyze.dart';
 
 // ignore: implementation_imports
-import 'package:slang/src/runner/generate.dart';
+import 'package:slang_cli/src/runner/generate.dart';
 
 // ignore: implementation_imports
-import 'package:slang/src/runner/wip.dart';
+import 'package:slang_cli/src/runner/wip.dart';
 import 'package:slang_mcp/src/tools/add_locale.dart';
 import 'package:slang_mcp/src/tools/apply.dart';
 

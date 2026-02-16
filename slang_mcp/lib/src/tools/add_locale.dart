@@ -17,13 +17,13 @@ import 'package:slang/src/builder/utils/path_utils.dart';
 import 'package:slang/src/builder/utils/regex_utils.dart';
 
 // ignore: implementation_imports
-import 'package:slang/src/runner/apply.dart';
+import 'package:slang_cli/src/runner/apply.dart';
 
 // ignore: implementation_imports
-import 'package:slang/src/runner/configure.dart';
+import 'package:slang_cli/src/runner/configure.dart';
 
 // ignore: implementation_imports
-import 'package:slang/src/runner/generate.dart';
+import 'package:slang_cli/src/runner/generate.dart';
 
 Future<void> addLocale({
   required I18nLocale locale,

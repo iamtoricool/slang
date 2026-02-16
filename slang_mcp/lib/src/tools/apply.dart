@@ -8,10 +8,10 @@ import 'package:slang/src/builder/builder/translation_map_builder.dart';
 import 'package:slang/src/builder/model/i18n_locale.dart';
 
 // ignore: implementation_imports
-import 'package:slang/src/runner/apply.dart';
+import 'package:slang_cli/src/runner/apply.dart';
 
 // ignore: implementation_imports
-import 'package:slang/src/runner/generate.dart';
+import 'package:slang_cli/src/runner/generate.dart';
 
 Future<void> apply({
   required I18nLocale locale,

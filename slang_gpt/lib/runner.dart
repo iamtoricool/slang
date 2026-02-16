@@ -17,7 +17,7 @@ import 'package:slang/src/builder/utils/map_utils.dart';
 // ignore: implementation_imports
 import 'package:slang/src/builder/utils/path_utils.dart';
 // ignore: implementation_imports
-import 'package:slang/src/runner/apply.dart';
+import 'package:slang_cli/src/runner/apply.dart';
 import 'package:slang_gpt/model/gpt_config.dart';
 import 'package:slang_gpt/model/gpt_model.dart';
 import 'package:slang_gpt/model/gpt_prompt.dart';

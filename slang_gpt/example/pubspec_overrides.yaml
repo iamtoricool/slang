@@ -1,5 +1,7 @@
 dependency_overrides:
   slang:
     path: ../../slang
+  slang_cli:
+    path: ../../slang_cli
   slang_gpt:
     path: ..

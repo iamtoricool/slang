@@ -12,6 +12,7 @@ executables:
 dependencies:
   mcp_dart: ^1.2.2
   slang: '>=4.12.0 <5.0.0'
+  slang_cli: '>=4.12.1 <5.0.0'
 
 dev_dependencies:
   lints: ^6.0.0
