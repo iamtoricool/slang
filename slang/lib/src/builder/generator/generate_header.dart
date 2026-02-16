@@ -572,6 +572,11 @@ void _generateInterfaces({
   const fieldsVar = r'$fields';
 
   for (final interface in config.interface) {
+    if (!interface.generateMixin) {
+      buffer.writeln('// ${interface.name}: Skipped');
+      continue;
+    }
+
     buffer.writeln();
     buffer.writeln('mixin ${interface.name} {');
     for (final attribute in interface.attributes) {

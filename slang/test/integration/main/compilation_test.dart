@@ -2,6 +2,7 @@ import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:test/test.dart';
 
 import '../../util/resources_utils.dart';
+import '../../util/setup.dart';
 
 /// These tests ensure that the generated code compiles.
 /// It currently only checks for syntax errors.
@@ -14,6 +15,10 @@ void main() {
     );
     expect(result.errors, isEmpty);
   }
+
+  setUpAll(() {
+    runSetupAll();
+  });
 
   test('fallback base locale', () {
     expectCompiles('main/_expected_fallback_base_locale_main.output');

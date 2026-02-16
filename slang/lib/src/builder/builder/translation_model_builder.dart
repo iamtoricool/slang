@@ -779,6 +779,8 @@ Interface? _determineInterfaceForContainer({
     final attributes = _parseInterfaceContainerAttributes(children);
     return Interface(
       name: specifiedInterface,
+      generateMixin: existingInterface?.generateMixin ??
+          InterfaceConfig.defaultGenerateMixin,
       attributes: {...attributes.common, ...attributes.optional},
     );
   } else if (interfaceCollection.globalInterfaces.isNotEmpty) {
@@ -861,6 +863,8 @@ Interface? _determineInterface({
     // create the corresponding concrete interface here
     return Interface(
       name: specifiedInterface,
+      generateMixin: existingInterface?.generateMixin ??
+          InterfaceConfig.defaultGenerateMixin,
       attributes: _parseAttributes(node),
     );
   } else if (interfaceCollection.globalInterfaces.isNotEmpty) {
@@ -1036,10 +1040,11 @@ class _InterfaceAttributesResult {
 
 extension on BuildModelConfig {
   InterfaceCollection buildInterfaceCollection() {
-    Map<String, Interface> originalInterfaces = {};
-    Map<String, Interface> globalInterfaces = {};
-    Map<String, String> pathInterfaceContainerMap = {};
-    Map<String, String> pathInterfaceNameMap = {};
+    final unconfiguredInterfaces = <String, bool>{};
+    final originalInterfaces = <String, Interface>{};
+    final globalInterfaces = <String, Interface>{};
+    final pathInterfaceContainerMap = <String, String>{};
+    final pathInterfaceNameMap = <String, String>{};
     for (final interfaceConfig in interfaces) {
       final Interface? interface;
       if (interfaceConfig.attributes.isNotEmpty) {
@@ -1047,6 +1052,23 @@ extension on BuildModelConfig {
         originalInterfaces[interface.name] = interface;
       } else {
         interface = null;
+      }
+
+      if (interfaceConfig.paths.isNotEmpty) {
+        for (final path in interfaceConfig.paths) {
+          if (path.isContainer) {
+            pathInterfaceContainerMap[path.path] = interfaceConfig.name;
+          } else {
+            pathInterfaceNameMap[path.path] = interfaceConfig.name;
+          }
+        }
+      } else {
+        if (interface != null) {
+          globalInterfaces[interface.name] = interface;
+        } else {
+          unconfiguredInterfaces[interfaceConfig.name] =
+              interfaceConfig.generateMixin;
+        }
       }
 
       if (interfaceConfig.paths.isEmpty && interface != null) {
@@ -1064,7 +1086,15 @@ extension on BuildModelConfig {
     return InterfaceCollection(
       originalInterfaces: originalInterfaces,
       globalInterfaces: globalInterfaces,
-      resultInterfaces: {...originalInterfaces},
+      resultInterfaces: {
+        ...originalInterfaces,
+        for (final entry in unconfiguredInterfaces.entries)
+          entry.key: Interface(
+            name: entry.key,
+            generateMixin: entry.value,
+            attributes: {},
+          ),
+      },
       pathInterfaceContainerMap: pathInterfaceContainerMap,
       pathInterfaceNameMap: pathInterfaceNameMap,
     );

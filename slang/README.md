@@ -346,9 +346,6 @@ contexts:
 interfaces:
   PageData: onboarding.pages.*
   PageData2:
-    paths:
-      - my.path
-      - cool.pages.*
     attributes:
       - String title
       - String? content
@@ -425,9 +422,6 @@ targets:
           interfaces:
             PageData: onboarding.pages.*
             PageData2:
-              paths:
-                - my.path
-                - cool.pages.*
               attributes:
                 - String title
                 - String? content
@@ -449,49 +443,50 @@ targets:
 
 </details>
 
-| Key                                    | Type                                              | Usage                                                        | Default        |
-|----------------------------------------|---------------------------------------------------|--------------------------------------------------------------|----------------|
-| `base_locale`                          | `String`                                          | locale of default json                                       | `en`           |
-| `fallback_strategy`                    | `none`, `base_locale`, `base_locale_empty_string` | handle missing translations [(i)](#-fallback)                | `none`         |
-| `input_directory`                      | `String`                                          | path to input directory                                      | `null`         |
-| `input_file_pattern`                   | `String`                                          | input file pattern, must end with .json, .yaml, .csv, .arb   | `.i18n.json`   |
-| `output_directory`                     | `String`                                          | path to output directory                                     | `null`         |
-| `output_file_name`                     | `String`                                          | output file name                                             | `null`         |
-| `lazy`                                 | `Boolean`                                         | load translations lazily [(i)](#-lazy-loading)               | `true`         |
-| `locale_handling`                      | `Boolean`                                         | generate locale handling logic [(i)](#-dependency-injection) | `true`         |
-| `flutter_integration`                  | `Boolean`                                         | generate flutter features [(i)](#-dart-only)                 | `true`         |
-| `namespaces`                           | `Boolean`                                         | split input files [(i)](#-namespaces)                        | `false`        |
-| `translate_var`                        | `String`                                          | translate variable name                                      | `t`            |
-| `enum_name`                            | `String`                                          | enum name                                                    | `AppLocale`    |
-| `class_name`                           | `String`                                          | name of the translations class                               | `Translations` |
-| `translation_class_visibility`         | `private`, `public`                               | class visibility                                             | `private`      |
-| `key_case`                             | `null`, `camel`, `pascal`, `snake`                | transform keys (optional) [(i)](#-recasing)                  | `null`         |
-| `key_map_case`                         | `null`, `camel`, `pascal`, `snake`                | transform keys for maps (optional) [(i)](#-recasing)         | `null`         |
-| `param_case`                           | `null`, `camel`, `pascal`, `snake`                | transform parameters (optional) [(i)](#-recasing)            | `null`         |
-| `sanitization.enabled`                 | `Boolean`                                         | enable sanitization [(i)](#-sanitization)                    | `true`         |
-| `sanitization.prefix`                  | `String`                                          | prefix for sanitization [(i)](#-sanitization)                | `k`            |
-| `sanitization.case`                    | `null`, `camel`, `pascal`, `snake`                | case style for sanitization [(i)](#-sanitization)            | `camel`        |
-| `string_interpolation`                 | `dart`, `braces`, `double_braces`                 | string interpolation mode [(i)](#-string-interpolation)      | `dart`         |
-| `flat_map`                             | `Boolean`                                         | generate flat map [(i)](#-dynamic-keys--flat-map)            | `true`         |
-| `translation_overrides`                | `Boolean`                                         | enable translation overrides [(i)](#-translation-overrides)  | `false`        |
-| `timestamp`                            | `Boolean`                                         | write "Built on" timestamp                                   | `true`         |
-| `statistics`                           | `Boolean`                                         | write statistics (locale and string count)                   | `true`         |
-| `maps`                                 | `List<String>`                                    | entries which should be accessed via keys [(i)](#-maps)      | `[]`           |
-| `pluralization.auto`                   | `off`, `cardinal`, `ordinal`                      | detect plurals automatically [(i)](#-pluralization)          | `cardinal`     |
-| `pluralization.default_parameter`      | `String`                                          | default plural parameter [(i)](#-pluralization)              | `n`            |
-| `pluralization.cardinal`               | `List<String>`                                    | entries which have cardinals                                 | `[]`           |
-| `pluralization.ordinal`                | `List<String>`                                    | entries which have ordinals                                  | `[]`           |
-| `contexts.<context>.default_parameter` | `String`                                          | default parameter name [(i)](#-custom-contexts--enums)       | `context`      |
-| `contexts.<context>.generate_enum`     | `Boolean`                                         | generate enum [(i)](#-custom-contexts--enums)                | `true`         |
-| `children of interfaces`               | `Pairs of Alias:Path`                             | alias interfaces [(i)](#-interfaces)                         | `null`         |
-| `obfuscation.enabled`                  | `Boolean`                                         | enable obfuscation [(i)](#-obfuscation)                      | `false`        |
-| `obfuscation.secret`                   | `String`                                          | obfuscation secret (random if null) [(i)](#-obfuscation)     | `null`         |
-| `format.enabled`                       | `Boolean`                                         | enable auto format [(i)](#-formatting)                       | `false`        |
-| `format.width`                         | `String`                                          | set line length / characters per line [(i)](#-formatting)    | `null`         |
-| `autodoc.enabled`                      | `Boolean`                                         | enable autodoc [(i)](#-auto-generated-comments)              | `true`         |
-| `autodoc.locales`                      | `List<String>`                                    | list of locales to generate [(i)](#-auto-generated-comments) | `$BASE$`       |
-| `imports`                              | `List<String>`                                    | generate import statements                                   | `[]`           |
-| `generate_enum`                        | `Boolean`                                         | global `generate_enum` [(i)](#-custom-contexts--enums)       | `true`         |
+| Key                                     | Type                                              | Usage                                                         | Default        |
+|-----------------------------------------|---------------------------------------------------|---------------------------------------------------------------|----------------|
+| `base_locale`                           | `String`                                          | locale of default json                                        | `en`           |
+| `fallback_strategy`                     | `none`, `base_locale`, `base_locale_empty_string` | handle missing translations [(i)](#-fallback)                 | `none`         |
+| `input_directory`                       | `String`                                          | path to input directory                                       | `null`         |
+| `input_file_pattern`                    | `String`                                          | input file pattern, must end with .json, .yaml, .csv, .arb    | `.i18n.json`   |
+| `output_directory`                      | `String`                                          | path to output directory                                      | `null`         |
+| `output_file_name`                      | `String`                                          | output file name                                              | `null`         |
+| `lazy`                                  | `Boolean`                                         | load translations lazily [(i)](#-lazy-loading)                | `true`         |
+| `locale_handling`                       | `Boolean`                                         | generate locale handling logic [(i)](#-dependency-injection)  | `true`         |
+| `flutter_integration`                   | `Boolean`                                         | generate flutter features [(i)](#-dart-only)                  | `true`         |
+| `namespaces`                            | `Boolean`                                         | split input files [(i)](#-namespaces)                         | `false`        |
+| `translate_var`                         | `String`                                          | translate variable name                                       | `t`            |
+| `enum_name`                             | `String`                                          | enum name                                                     | `AppLocale`    |
+| `class_name`                            | `String`                                          | name of the translations class                                | `Translations` |
+| `translation_class_visibility`          | `private`, `public`                               | class visibility                                              | `private`      |
+| `key_case`                              | `null`, `camel`, `pascal`, `snake`                | transform keys (optional) [(i)](#-recasing)                   | `null`         |
+| `key_map_case`                          | `null`, `camel`, `pascal`, `snake`                | transform keys for maps (optional) [(i)](#-recasing)          | `null`         |
+| `param_case`                            | `null`, `camel`, `pascal`, `snake`                | transform parameters (optional) [(i)](#-recasing)             | `null`         |
+| `sanitization.enabled`                  | `Boolean`                                         | enable sanitization [(i)](#-sanitization)                     | `true`         |
+| `sanitization.prefix`                   | `String`                                          | prefix for sanitization [(i)](#-sanitization)                 | `k`            |
+| `sanitization.case`                     | `null`, `camel`, `pascal`, `snake`                | case style for sanitization [(i)](#-sanitization)             | `camel`        |
+| `string_interpolation`                  | `dart`, `braces`, `double_braces`                 | string interpolation mode [(i)](#-string-interpolation)       | `dart`         |
+| `flat_map`                              | `Boolean`                                         | generate flat map [(i)](#-dynamic-keys--flat-map)             | `true`         |
+| `translation_overrides`                 | `Boolean`                                         | enable translation overrides [(i)](#-translation-overrides)   | `false`        |
+| `timestamp`                             | `Boolean`                                         | write "Built on" timestamp                                    | `true`         |
+| `statistics`                            | `Boolean`                                         | write statistics (locale and string count)                    | `true`         |
+| `maps`                                  | `List<String>`                                    | entries which should be accessed via keys [(i)](#-maps)       | `[]`           |
+| `pluralization.auto`                    | `off`, `cardinal`, `ordinal`                      | detect plurals automatically [(i)](#-pluralization)           | `cardinal`     |
+| `pluralization.default_parameter`       | `String`                                          | default plural parameter [(i)](#-pluralization)               | `n`            |
+| `pluralization.cardinal`                | `List<String>`                                    | entries which have cardinals                                  | `[]`           |
+| `pluralization.ordinal`                 | `List<String>`                                    | entries which have ordinals                                   | `[]`           |
+| `contexts.<context>.default_parameter`  | `String`                                          | default parameter name [(i)](#-custom-contexts--enums)        | `context`      |
+| `contexts.<context>.generate_enum`      | `Boolean`                                         | generate enum [(i)](#-custom-contexts--enums)                 | `true`         |
+| `interfaces.<interface>.generate_mixin` | `Boolean`                                         | generate mixin [(i)](#-interfaces)                            | `true`         |
+| `interfaces.<interface>.attributes`     | `List<InterfaceAttribute>`                        | interface attributes (turn off inference) [(i)](#-interfaces) | `null`         |
+| `obfuscation.enabled`                   | `Boolean`                                         | enable obfuscation [(i)](#-obfuscation)                       | `false`        |
+| `obfuscation.secret`                    | `String`                                          | obfuscation secret (random if null) [(i)](#-obfuscation)      | `null`         |
+| `format.enabled`                        | `Boolean`                                         | enable auto format [(i)](#-formatting)                        | `false`        |
+| `format.width`                          | `String`                                          | set line length / characters per line [(i)](#-formatting)     | `null`         |
+| `autodoc.enabled`                       | `Boolean`                                         | enable autodoc [(i)](#-auto-generated-comments)               | `true`         |
+| `autodoc.locales`                       | `List<String>`                                    | list of locales to generate [(i)](#-auto-generated-comments)  | `$BASE$`       |
+| `imports`                               | `List<String>`                                    | generate import statements                                    | `[]`           |
+| `generate_enum`                         | `Boolean`                                         | global `generate_enum` [(i)](#-custom-contexts--enums)        | `true`         |
 
 ## Main Features
 
@@ -2293,7 +2288,7 @@ Slang is also available for other platforms:
 
 MIT License
 
-Copyright (c) 2020-2025 Tien Do Nam
+Copyright (c) 2020-2026 Tien Do Nam
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -164,6 +164,7 @@ extension on Map<String, dynamic> {
     return entries.map((e) {
       final interfaceName = e.key.toCase(CaseStyle.pascal);
       final Set<InterfaceAttribute> attributes = {};
+      bool? generateMixin;
       final List<InterfacePath> paths;
       if (e.value is String) {
         // PageData: welcome.pages
@@ -221,13 +222,20 @@ extension on Map<String, dynamic> {
             .map((path) => InterfacePath(path))
             .toList();
 
-        if (attributes.isEmpty && paths.isEmpty) {
-          throw 'Interface "$interfaceName" has no paths nor attributes.';
-        }
+        // parse generateMixin
+        generateMixin = interfaceConfig['generate_mixin'] as bool?;
+      }
+
+      if (paths.isNotEmpty) {
+        log.deprecatedWarning(
+          '4.13.0',
+          '$interfaceName: Do not specify paths in the config. Specify them directly in the nodes via modifiers (interface=$interfaceName)',
+        );
       }
 
       return InterfaceConfig(
         name: interfaceName,
+        generateMixin: generateMixin ?? InterfaceConfig.defaultGenerateMixin,
         attributes: attributes,
         paths: paths,
       );

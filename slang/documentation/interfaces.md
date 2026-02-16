@@ -61,11 +61,15 @@ This method allows for a more fine-grained configuration.
 
 ```yaml
 # Config
+imports:
+  - 'package:my_package/path_to_mixin.dart' # define where your mixin is (only if generate_mixin is false)
+
 interfaces:
-  MyInterface: about.changelog.* # shorthand
+  MyInterface: about.changelog.* # shorthand, deprecated: Specify the interfaces directly in the translation keys with the modifier (interface=MyInterface)
   MyOtherInterface: # full config
-    paths:
+    paths: # deprecated: Specify the interfaces directly in the translation keys with the modifier (interface=MyOtherInterface)
       - onboarding.whatsNew.*
+    generate_mixin: true # default: true
     attributes:
       - String title
       - String? content

@@ -4,12 +4,16 @@ final _setEquality = SetEquality();
 
 /// The config from build.yaml
 class InterfaceConfig {
+  static const bool defaultGenerateMixin = true;
+
   final String name;
+  final bool generateMixin;
   final Set<InterfaceAttribute> attributes;
   final List<InterfacePath> paths;
 
   InterfaceConfig({
     required this.name,
+    required this.generateMixin,
     required this.attributes,
     required this.paths,
   });
@@ -31,13 +35,17 @@ class InterfacePath {
 /// equals and hash are only dependent on attributes
 class Interface {
   final String name;
+  final bool generateMixin;
   final Set<InterfaceAttribute> attributes;
 
   /// True, if at least one attribute is a list
   final bool hasLists;
 
-  Interface({required this.name, required this.attributes})
-      : hasLists = attributes.any((a) => a.returnType.startsWith('List<'));
+  Interface({
+    required this.name,
+    required this.generateMixin,
+    required this.attributes,
+  }) : hasLists = attributes.any((a) => a.returnType.startsWith('List<'));
 
   @override
   int get hashCode {
@@ -90,6 +98,7 @@ class Interface {
     }
     return Interface(
       name: name,
+      generateMixin: generateMixin,
       attributes: extendedAttributes.values.toSet(),
     );
   }
@@ -202,7 +211,11 @@ class AttributeParameter {
 
 extension InterfaceConfigExt on InterfaceConfig {
   Interface toInterface() {
-    return Interface(name: name, attributes: attributes);
+    return Interface(
+      name: name,
+      generateMixin: generateMixin,
+      attributes: attributes,
+    );
   }
 }
 

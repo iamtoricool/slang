@@ -6,6 +6,7 @@ import 'package:slang/src/builder/model/translation_map.dart';
 import 'package:test/test.dart';
 
 import '../../util/resources_utils.dart';
+import '../../util/setup.dart';
 
 void main() {
   late String compactInput;
@@ -13,6 +14,10 @@ void main() {
   late String expectedMainOutput;
   late String expectedEnOutput;
   late String expectedDeOutput;
+
+  setUpAll(() {
+    runSetupAll();
+  });
 
   setUp(() {
     compactInput = loadResource('main/csv_compact.csv');

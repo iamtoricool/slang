@@ -4,6 +4,7 @@ import 'package:test/test.dart';
 Interface _i(Map<String, bool> attributes, [String name = '']) {
   return Interface(
     name: name,
+    generateMixin: true,
     attributes: {
       for (final a in attributes.entries) _attr(a.key, a.value),
     },

@@ -6,11 +6,16 @@ import 'package:slang/src/builder/model/translation_map.dart';
 import 'package:test/test.dart';
 
 import '../../util/resources_utils.dart';
+import '../../util/setup.dart';
 
 void main() {
   late String input;
   late String buildYaml;
   late String expectedMainOutput;
+
+  setUpAll(() {
+    runSetupAll();
+  });
 
   setUp(() {
     input = loadResource('main/json_simple.json');

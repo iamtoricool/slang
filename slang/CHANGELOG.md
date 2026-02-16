@@ -1,3 +1,8 @@
+## 4.13.0
+
+- feat: add `generate_mixin` to interfaces to allow predefined mixins instead of generating new ones (#347)
+- **DEPRECATED:** Do not specify paths in interface config, use interface modifier in the translation keys instead (e.g. `myKey(interface=MyInterface)`)
+
 ## 4.12.1
 
 - feat: also format base locale when running `slang normalize` (#344) @adil192

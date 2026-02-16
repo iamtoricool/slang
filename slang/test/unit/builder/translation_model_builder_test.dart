@@ -219,6 +219,7 @@ void main() {
         buildConfig: RawConfig.defaultConfig.copyWith(interfaces: [
           InterfaceConfig(
             name: 'MyInterface',
+            generateMixin: true,
             paths: [InterfacePath('myEntry')],
             attributes: {
               InterfaceAttribute(
@@ -231,6 +232,7 @@ void main() {
           ),
           InterfaceConfig(
             name: 'MyInterface2',
+            generateMixin: true,
             paths: [InterfacePath('myEntry2.*')],
             attributes: {
               InterfaceAttribute(
@@ -301,6 +303,7 @@ void main() {
           interfaces: [
             InterfaceConfig(
               name: 'MyNestedInterface',
+              generateMixin: true,
               paths: [],
               attributes: {
                 InterfaceAttribute(

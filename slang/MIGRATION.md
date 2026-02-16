@@ -2,7 +2,7 @@
 
 ## slang 4.0 to 5.0
 
-### Remove namespace in file name
+### 1. Remove namespace in file name
 
 When namespaces are disabled, remove the namespace in the file name.
 
@@ -22,7 +22,7 @@ lib/
       └── de.i18n.json
 ```
 
-### Add locale in file name
+### 2. Add locale in file name
 
 When namespaces are enabled, always specify the locale in the file name.
 
@@ -42,6 +42,70 @@ i18n/
  └── widgets_fr.i18n.json
  └── errorDialogs_en.i18n.json
  └── errorDialogs_fr.i18n.json
+```
+
+### 3. Use interface modifier
+
+Add an explicit `interface` or `singleInterface` modifier instead of relying on auto detection of interfaces.
+
+Before
+
+```json5
+{
+  "onboarding": {
+    "whatsNew": {
+      "v2": {
+        "title": "New in 2.0",
+        "rows": [
+          "Add sync"
+        ]
+      },
+      "v3": {
+        "title": "New in 3.0",
+        "rows": [
+          "New game modes",
+          "And a lot more!"
+        ]
+      }
+    }
+  }
+}
+```
+
+```yaml
+# Config
+interfaces:
+  ChangeData:
+    paths:
+        - onboarding.whatsNew.*
+```
+
+After
+
+```json5
+{
+  "onboarding": {
+    "whatsNew(interface=ChangeData)": { // <-- add interface modifier here
+      "v2": {
+        "title": "New in 2.0",
+        "rows": [
+          "Add sync"
+        ]
+      },
+      "v3": {
+        "title": "New in 3.0",
+        "rows": [
+          "New game modes",
+          "And a lot more!"
+        ]
+      }
+    }
+  }
+}
+```
+
+```yaml
+# no config needed
 ```
 
 ## slang 3.0 to 4.0

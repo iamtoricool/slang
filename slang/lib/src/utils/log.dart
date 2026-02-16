@@ -8,6 +8,7 @@ enum Level {
 }
 
 Level _level = Level.normal;
+bool testMode = false;
 
 /// Set the logging level
 void setLevel(Level level) {
@@ -20,6 +21,13 @@ Level get level => _level;
 /// Logs an error message
 void error(String message) {
   print(message);
+}
+
+void deprecatedWarning(String version, String message) {
+  if (testMode) {
+    return;
+  }
+  print('DEPRECATED(v$version): $message');
 }
 
 /// Logs informational messages
