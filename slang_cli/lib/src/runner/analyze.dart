@@ -370,7 +370,10 @@ Map<String, dynamic> _getUnusedTranslationsInSourceCode({
         dir
             .listSync(recursive: true)
             .whereType<File>()
-            .where((f) => f.path.endsWith('.dart'))
+            .where((f) =>
+                f.path.endsWith('.dart') &&
+                !f.path.endsWith('.g.dart') &&
+                !f.path.endsWith('.freezed.dart'))
             .toList(),
       );
     }

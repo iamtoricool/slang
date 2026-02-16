@@ -9,10 +9,15 @@ class TranslationUsageAnalyzer {
   final String translateVar;
   final Map<String, String> _translationVariables = {}; // name -> path
   final Set<String> _usedPaths = {};
+  final Set<String> _shadowedNames = {}; // variables that shadow translateVar
 
   TranslationUsageAnalyzer({required this.translateVar});
 
   Set<String> analyzeFile(String filePath) {
+    // Clear per-file state; variables are file-scoped but usage is global
+    _translationVariables.clear();
+    _shadowedNames.clear();
+
     try {
       final content = File(filePath).readAsStringSync();
       final result = parseString(path: filePath, content: content);
@@ -21,7 +26,7 @@ class TranslationUsageAnalyzer {
       return _usedPaths;
     } catch (e) {
       log.verbose('Failed to analyze $filePath: $e');
-      return {};
+      return _usedPaths;
     }
   }
 
@@ -30,7 +35,9 @@ class TranslationUsageAnalyzer {
   }
 
   void recordUsedPath(String path) {
-    _usedPaths.add(path);
+    if (path.isNotEmpty) {
+      _usedPaths.add(path);
+    }
   }
 
   bool isTranslationVariable(String variableName) {
@@ -40,6 +47,14 @@ class TranslationUsageAnalyzer {
   String? getVariablePath(String variableName) {
     return _translationVariables[variableName];
   }
+
+  void recordShadowedName(String name) {
+    _shadowedNames.add(name);
+  }
+
+  bool isShadowed(String name) {
+    return _shadowedNames.contains(name);
+  }
 }
 
 /// AST visitor that tracks translation variable assignments and usage
@@ -48,13 +63,28 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
 
   TranslationUsageVisitor(this.analyzer);
 
+  /// Joins a base path with a suffix, handling the empty base path case
+  /// (which occurs when a variable is a root alias for the translate var).
+  String _joinPath(String basePath, String suffix) {
+    return basePath.isEmpty ? suffix : '$basePath.$suffix';
+  }
+
   @override
   void visitVariableDeclaration(VariableDeclaration node) {
+    final name = node.name.lexeme;
     final initializer = node.initializer;
+
     if (initializer != null) {
       final path = _extractTranslationPath(initializer);
       if (path != null) {
-        analyzer.recordTranslationVariable(node.name.lexeme, path);
+        // This is a translation variable (e.g., final screen = t.mainScreen)
+        // or a root alias (e.g., final t2 = t → path is empty string)
+        analyzer.recordTranslationVariable(name, path);
+      } else if (name == analyzer.translateVar) {
+        // Variable shadows the translate var with a non-translation value
+        // (e.g., final t = 'hello'). Mark as shadowed so t.length isn't
+        // incorrectly detected as a translation access.
+        analyzer.recordShadowedName(name);
       }
     }
     super.visitVariableDeclaration(node);
@@ -66,7 +96,7 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
     if (target is SimpleIdentifier) {
       final basePath = analyzer.getVariablePath(target.name);
       if (basePath != null) {
-        final fullPath = '$basePath.${node.propertyName.name}';
+        final fullPath = _joinPath(basePath, node.propertyName.name);
         analyzer.recordUsedPath(fullPath);
         return;
       }
@@ -79,8 +109,10 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
         final variablePath = analyzer.getVariablePath(rootTarget.name);
         if (variablePath != null) {
           final targetPath = _getTargetPath(target);
-          final fullPath =
-              '$variablePath.$targetPath.${node.propertyName.name}';
+          final fullPath = _joinPath(
+            variablePath,
+            '$targetPath.${node.propertyName.name}',
+          );
           analyzer.recordUsedPath(fullPath);
           return;
         }
@@ -105,13 +137,14 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
     if (target is SimpleIdentifier) {
       final variablePath = analyzer.getVariablePath(target.name);
       if (variablePath != null) {
-        final fullPath = '$variablePath.${node.methodName.name}';
+        final fullPath = _joinPath(variablePath, node.methodName.name);
         analyzer.recordUsedPath(fullPath);
         return;
       }
 
       // Case 2: Direct usage on root (e.g. t.method())
-      if (target.name == analyzer.translateVar) {
+      if (target.name == analyzer.translateVar &&
+          !analyzer.isShadowed(target.name)) {
         analyzer.recordUsedPath(node.methodName.name);
         return;
       }
@@ -120,7 +153,7 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
     // Case 3: Chained usage (e.g. t.section.method() or context.t.method())
     if (target != null && _isTranslationAccess(target)) {
       final basePath = _getExpressionPath(target);
-      final fullPath = '$basePath.${node.methodName.name}';
+      final fullPath = _joinPath(basePath, node.methodName.name);
       analyzer.recordUsedPath(fullPath);
       return;
     }
@@ -146,7 +179,7 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
     // Check if this is a translation variable usage like screen.title
     final basePath = analyzer.getVariablePath(prefix.name);
     if (basePath != null) {
-      final fullPath = '$basePath.${identifier.name}';
+      final fullPath = _joinPath(basePath, identifier.name);
       analyzer.recordUsedPath(fullPath);
       return;
     }
@@ -162,7 +195,22 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
   }
 
   /// Extracts translation path from expressions like t.mainScreen.title
+  /// Returns empty string for bare translate var (e.g., `final t2 = t;`),
+  /// which represents a root alias.
   String? _extractTranslationPath(Expression expression) {
+    // Handle bare SimpleIdentifier (e.g., `final t2 = t;`)
+    if (expression is SimpleIdentifier) {
+      if (expression.name == analyzer.translateVar &&
+          !analyzer.isShadowed(expression.name)) {
+        return ''; // root alias — path is empty
+      }
+      // Could also be an alias of an alias (e.g., final t3 = t2;)
+      final variablePath = analyzer.getVariablePath(expression.name);
+      if (variablePath != null) {
+        return variablePath;
+      }
+    }
+
     // Handle PrefixedIdentifier (e.g., t.mainScreen, screen.title)
     if (expression is PrefixedIdentifier) {
       final prefix = expression.prefix;
@@ -171,7 +219,7 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
       // Check if this is a translation variable access like screen.title
       final variablePath = analyzer.getVariablePath(prefix.name);
       if (variablePath != null) {
-        return '$variablePath.${identifier.name}';
+        return _joinPath(variablePath, identifier.name);
       }
     }
 
@@ -183,7 +231,7 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
       if (target is SimpleIdentifier) {
         final variablePath = analyzer.getVariablePath(target.name);
         if (variablePath != null) {
-          return '$variablePath.${expression.propertyName.name}';
+          return _joinPath(variablePath, expression.propertyName.name);
         }
       }
 
@@ -194,7 +242,10 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
           final variablePath = analyzer.getVariablePath(rootTarget.name);
           if (variablePath != null) {
             final targetPath = _getPropertyAccessPath(target);
-            return '$variablePath.$targetPath.${expression.propertyName.name}';
+            return _joinPath(
+              variablePath,
+              '$targetPath.${expression.propertyName.name}',
+            );
           }
         }
       }
@@ -210,6 +261,11 @@ class TranslationUsageVisitor extends RecursiveAstVisitor<void> {
 
   /// Checks if an expression is a translation access
   bool _isTranslationAccess(Expression expression) {
+    // If translateVar has been shadowed in this file, don't match
+    if (analyzer.isShadowed(analyzer.translateVar)) {
+      return false;
+    }
+
     final exprString = expression.toString();
 
     // Direct access: t.some.path

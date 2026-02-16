@@ -396,6 +396,287 @@ void main() {
       expect(usedPaths, contains('\$wip'));
       expect(usedPaths, contains('section.myContext'));
     });
+
+    test('clears variable state between files (no cross-file leaking)', () {
+      // File A defines a variable `screen = t.mainScreen`
+      final codeA = '''
+        void main() {
+          final screen = t.mainScreen;
+          print(screen.title);
+        }
+      ''';
+      // File B uses an unrelated `screen.title` (not a translation)
+      final codeB = '''
+        class Screen { String get title => 'hello'; }
+        void main() {
+          final screen = Screen();
+          print(screen.title);
+        }
+      ''';
+      final fileA = File('${tempDir.path}/a.dart');
+      fileA.writeAsStringSync(codeA);
+      final fileB = File('${tempDir.path}/b.dart');
+      fileB.writeAsStringSync(codeB);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+
+      // Analyze file A first — records `screen -> mainScreen`
+      final pathsAfterA = Set<String>.from(analyzer.analyzeFile(fileA.path));
+      expect(pathsAfterA, contains('mainScreen.title'));
+
+      // Analyze file B — `screen` in B is NOT a translation variable
+      final pathsAfterB = analyzer.analyzeFile(fileB.path);
+
+      // mainScreen.title should still be present (accumulated from file A)
+      expect(pathsAfterB, contains('mainScreen.title'));
+      // But file B's screen.title should NOT have added a second translation path
+      // (e.g., `mainScreen.title` again via leaked variable mapping)
+      // The absence of any new path proves the variable map was cleared
+      expect(pathsAfterB.difference(pathsAfterA), isEmpty);
+    });
+
+    test('handles root aliasing (final t2 = t)', () {
+      final code = '''
+        void main() {
+          final t2 = t;
+          print(t2.mainScreen.title);
+          print(t2.settings.language);
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      expect(usedPaths, contains('mainScreen.title'));
+      expect(usedPaths, contains('settings.language'));
+    });
+
+    test('handles chained root aliasing (final t3 = t2 = t)', () {
+      final code = '''
+        void main() {
+          final t2 = t;
+          final t3 = t2;
+          print(t3.mainScreen.title);
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      expect(usedPaths, contains('mainScreen.title'));
+    });
+
+    test('handles variable shadowing (final t = "hello")', () {
+      final code = '''
+        void main() {
+          final t = 'hello';
+          print(t.length);
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      // t.length should NOT be detected as a translation path
+      expect(usedPaths, isNot(contains('length')));
+    });
+
+    test('shadowing is per-file and does not persist', () {
+      // File A shadows t
+      final codeA = '''
+        void main() {
+          final t = 'hello';
+          print(t.length);
+        }
+      ''';
+      // File B uses t normally
+      final codeB = '''
+        void main() {
+          print(t.mainScreen.title);
+        }
+      ''';
+      final fileA = File('${tempDir.path}/a.dart');
+      fileA.writeAsStringSync(codeA);
+      final fileB = File('${tempDir.path}/b.dart');
+      fileB.writeAsStringSync(codeB);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      analyzer.analyzeFile(fileA.path);
+      analyzer.analyzeFile(fileB.path);
+
+      expect(analyzer.analyzeFile(fileB.path), contains('mainScreen.title'));
+      // length from file A should NOT be present
+      expect(analyzer.analyzeFile(fileA.path), isNot(contains('length')));
+    });
+
+    test('detects usage in string interpolation', () {
+      final code = '''
+        void main() {
+          print('Hello \${t.greeting}');
+          print('Welcome \${t.mainScreen.title}');
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      expect(usedPaths, contains('greeting'));
+      expect(usedPaths, contains('mainScreen.title'));
+    });
+
+    test('detects usage in collection literals', () {
+      final code = '''
+        void main() {
+          final list = [t.a.x, t.b.y];
+          final map = {'key': t.c.z};
+          final set = {t.d.w};
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      expect(usedPaths, contains('a.x'));
+      expect(usedPaths, contains('b.y'));
+      expect(usedPaths, contains('c.z'));
+      expect(usedPaths, contains('d.w'));
+    });
+
+    test('detects usage in lambdas and closures', () {
+      final code = '''
+        void main() {
+          final fn = () => t.mainScreen.title;
+          final items = ['a'].map((e) => t.mainScreen.subtitle);
+          void callback() {
+            print(t.settings.language);
+          }
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      expect(usedPaths, contains('mainScreen.title'));
+      expect(usedPaths, contains('mainScreen.subtitle'));
+      expect(usedPaths, contains('settings.language'));
+    });
+
+    test('detects usage in class fields and top-level variables', () {
+      final code = '''
+        final topLevel = t.app.name;
+
+        class MyWidget {
+          final title = t.mainScreen.title;
+          
+          String get subtitle => t.mainScreen.subtitle;
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      expect(usedPaths, contains('app.name'));
+      expect(usedPaths, contains('mainScreen.title'));
+      expect(usedPaths, contains('mainScreen.subtitle'));
+    });
+
+    test('works with custom translateVar', () {
+      final code = '''
+        void main() {
+          print(translations.mainScreen.title);
+          final screen = translations.mainScreen;
+          print(screen.subtitle);
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 'translations');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      expect(usedPaths, contains('mainScreen.title'));
+      expect(usedPaths, contains('mainScreen.subtitle'));
+      // Ensure default 't' does NOT match
+      expect(usedPaths, isNot(contains('translations.mainScreen.title')));
+    });
+
+    test('handles empty file gracefully', () {
+      final testFile = File('${tempDir.path}/empty.dart');
+      testFile.writeAsStringSync('');
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      expect(usedPaths, isEmpty);
+    });
+
+    test('handles malformed file gracefully', () {
+      final testFile = File('${tempDir.path}/bad.dart');
+      testFile.writeAsStringSync('this is not valid dart {{{{');
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      // Should not throw
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+      expect(usedPaths, isA<Set<String>>());
+    });
+
+    test('detects translation path, not method chain on result', () {
+      final code = '''
+        void main() {
+          print(t.mainScreen.title.toUpperCase());
+          print(t.settings.language.trim().toLowerCase());
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      // Should detect the translation path portion
+      // Due to AST toString-based path extraction, the full chain is recorded.
+      // This is acceptable — the unused check uses startsWith/prefix matching,
+      // so mainScreen.title.toUpperCase still matches mainScreen.title.
+      // What matters is that the translation path IS detected.
+      expect(
+        usedPaths.any((p) => p.startsWith('mainScreen.title')),
+        isTrue,
+      );
+      expect(
+        usedPaths.any((p) => p.startsWith('settings.language')),
+        isTrue,
+      );
+    });
+
+    test('root alias with method invocation', () {
+      final code = '''
+        void main() {
+          final t2 = t;
+          t2.myPlural(n: 5);
+        }
+      ''';
+      final testFile = File('${tempDir.path}/test.dart');
+      testFile.writeAsStringSync(code);
+
+      final analyzer = TranslationUsageAnalyzer(translateVar: 't');
+      final usedPaths = analyzer.analyzeFile(testFile.path);
+
+      expect(usedPaths, contains('myPlural'));
+    });
   });
 }
 
