@@ -1,0 +1,27 @@
+name: example
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  slang: ">=3.0.0 <5.0.0"
+  slang_flutter: ">=3.0.0 <5.0.0"
+  slang_cloud: any
+  http: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.11.1
+  slang_cli:
+    path: ../../slang_cli
+
+slang:
+  translation_overrides: true
+  namespaces: true

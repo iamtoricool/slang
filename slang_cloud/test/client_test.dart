@@ -9,7 +9,7 @@ void main() {
     late InMemorySlangCloudStorage storage;
 
     setUp(() {
-      config = SlangCloudConfig(baseUrl: 'https://api.example.com');
+      config = const SlangCloudConfig(baseUrl: 'https://api.example.com');
       storage = InMemorySlangCloudStorage();
     });
 
