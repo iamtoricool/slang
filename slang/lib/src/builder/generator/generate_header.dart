@@ -2,7 +2,6 @@ import 'package:slang/src/builder/generator/helper.dart';
 import 'package:slang/src/builder/model/build_model_config.dart';
 import 'package:slang/src/builder/model/generate_config.dart';
 import 'package:slang/src/builder/model/i18n_data.dart';
-import 'package:slang/src/builder/model/i18n_locale.dart';
 import 'package:slang/src/builder/model/node.dart';
 import 'package:slang/src/builder/utils/path_utils.dart';
 
@@ -230,42 +229,46 @@ void _generateEnum({
       '/// - if (LocaleSettings.currentLocale == $baseLocaleEnumConstant) // locale check');
 
   buffer.writeln(
-      'enum $enumName with BaseAppLocale<$enumName, ${config.className}> {');
-  for (int i = 0; i < allLocales.length; i++) {
-    final I18nLocale locale = allLocales[i].locale;
+      'class $enumName with BaseAppLocale<$enumName, ${config.className}> {');
 
-    buffer
-        .write('\t${locale.enumConstant}(languageCode: \'${locale.language}\'');
-    if (locale.script != null) {
-      buffer.write(', scriptCode: \'${locale.script}\'');
+  // Static const values
+  for (final locale in allLocales) {
+    buffer.write(
+        '\tstatic const ${locale.locale.enumConstant} = $enumName(languageCode: \'${locale.locale.language}\'');
+    if (locale.locale.script != null) {
+      buffer.write(', scriptCode: \'${locale.locale.script}\'');
     }
-    if (locale.country != null) {
-      buffer.write(', countryCode: \'${locale.country}\'');
+    if (locale.locale.country != null) {
+      buffer.write(', countryCode: \'${locale.locale.country}\'');
     }
-    buffer.write(')');
-
-    if (i != allLocales.length - 1) {
-      buffer.writeln(',');
-    } else {
-      buffer.writeln(';');
-    }
+    buffer.writeln(');');
   }
+
+  // Static values list
+  buffer.writeln('\tstatic const List<$enumName> values = [');
+  for (final locale in allLocales) {
+    buffer.writeln('\t\t${locale.locale.enumConstant},');
+  }
+  buffer.writeln('\t];');
 
   buffer.writeln();
   buffer.writeln('\tconst $enumName({');
   buffer.writeln('\t\trequired this.languageCode,');
-  buffer.writeln(
-    '\t\tthis.scriptCode, // ignore: unused_element, unused_element_parameter',
-  );
-  buffer.writeln(
-    '\t\tthis.countryCode, // ignore: unused_element, unused_element_parameter',
-  );
+  buffer.writeln('\t\tthis.scriptCode,');
+  buffer.writeln('\t\tthis.countryCode,');
   buffer.writeln('\t});');
 
   buffer.writeln();
   buffer.writeln('\t@override final String languageCode;');
   buffer.writeln('\t@override final String? scriptCode;');
   buffer.writeln('\t@override final String? countryCode;');
+
+  // Get base locale class name for dynamic fallback
+  final baseLocaleData = allLocales.first;
+  final baseClassName = getClassNameRoot(
+    className: config.className,
+    locale: baseLocaleData.locale,
+  );
 
   void generateBuildMethod(StringBuffer buffer,
       {required bool sync, required bool proxySync}) {
@@ -285,8 +288,9 @@ void _generateEnum({
       buffer.writeln('\t\t\tordinalResolver: ordinalResolver,');
       buffer.writeln('\t\t);');
     } else {
-      buffer.writeln('\t\tswitch (this) {');
-      for (final locale in allLocales) {
+      // Use if/else chain instead of switch
+      for (int i = 0; i < allLocales.length; i++) {
+        final locale = allLocales[i];
         final localeImportName = getImportName(
           locale: locale.locale,
         );
@@ -295,17 +299,32 @@ void _generateEnum({
           locale: locale.locale,
         );
 
-        buffer.writeln('\t\t\tcase $enumName.${locale.locale.enumConstant}:');
+        if (i == 0) {
+          buffer.writeln(
+              '\t\tif (this == $enumName.${locale.locale.enumConstant}) {');
+        } else {
+          buffer.writeln(
+              '\t\t} else if (this == $enumName.${locale.locale.enumConstant}) {');
+        }
+
         if (!locale.base && !sync) {
-          buffer.writeln('\t\t\t\tawait $localeImportName.loadLibrary();');
+          buffer.writeln('\t\t\tawait $localeImportName.loadLibrary();');
         }
         buffer.writeln(
-            '\t\t\t\treturn ${locale.base ? '' : '$localeImportName.'}$className(');
-        buffer.writeln('\t\t\t\t\toverrides: overrides,');
-        buffer.writeln('\t\t\t\t\tcardinalResolver: cardinalResolver,');
-        buffer.writeln('\t\t\t\t\tordinalResolver: ordinalResolver,');
-        buffer.writeln('\t\t\t\t);');
+            '\t\t\treturn ${locale.base ? '' : '$localeImportName.'}$className(');
+        buffer.writeln('\t\t\t\toverrides: overrides,');
+        buffer.writeln('\t\t\t\tcardinalResolver: cardinalResolver,');
+        buffer.writeln('\t\t\t\tordinalResolver: ordinalResolver,');
+        buffer.writeln('\t\t\t);');
       }
+
+      // Dynamic locale fallback: use base locale class
+      buffer.writeln('\t\t} else {');
+      buffer.writeln('\t\t\treturn $baseClassName(');
+      buffer.writeln('\t\t\t\toverrides: overrides,');
+      buffer.writeln('\t\t\t\tcardinalResolver: cardinalResolver,');
+      buffer.writeln('\t\t\t\tordinalResolver: ordinalResolver,');
+      buffer.writeln('\t\t\t);');
       buffer.writeln('\t\t}');
     }
 
@@ -321,6 +340,22 @@ void _generateEnum({
     buffer.writeln(
         '\t${config.className} get translations => LocaleSettings.instance.getTranslations(this);');
   }
+
+  // operator ==
+  buffer.writeln();
+  buffer.writeln('\t@override');
+  buffer.writeln('\tbool operator ==(Object other) =>');
+  buffer.writeln('\t\tidentical(this, other) ||');
+  buffer.writeln('\t\t(other is $enumName &&');
+  buffer.writeln('\t\t\tlanguageCode == other.languageCode &&');
+  buffer.writeln('\t\t\tscriptCode == other.scriptCode &&');
+  buffer.writeln('\t\t\tcountryCode == other.countryCode);');
+
+  // hashCode
+  buffer.writeln();
+  buffer.writeln('\t@override');
+  buffer.writeln(
+      '\tint get hashCode => Object.hash(languageCode, scriptCode, countryCode);');
 
   buffer.writeln('}');
 }
@@ -506,6 +541,7 @@ void _generateUtil({
   if (config.translationOverrides) {
     buffer.writeln('\t\tbuildConfig: _buildConfig,');
   }
+  buffer.writeln('\t\tdynamicBuilder: $enumName.new,');
   buffer.writeln('\t);');
   buffer.writeln();
   buffer.writeln('\tstatic final instance = $utilClass._();');

@@ -6,7 +6,7 @@
 /// Locales: 3
 /// Strings: 21 (7 per locale)
 ///
-/// Built on 2025-11-03 at 21:59 UTC
+/// Built on 2026-02-17 at 11:58 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint, unused_import
@@ -28,15 +28,20 @@ part 'strings_en.g.dart';
 /// - LocaleSettings.setLocale(AppLocale.en) // set locale
 /// - Locale locale = AppLocale.en.flutterLocale // get flutter locale from enum
 /// - if (LocaleSettings.currentLocale == AppLocale.en) // locale check
-enum AppLocale with BaseAppLocale<AppLocale, Translations> {
-	en(languageCode: 'en'),
-	de(languageCode: 'de'),
-	frFr(languageCode: 'fr', countryCode: 'FR');
+class AppLocale with BaseAppLocale<AppLocale, Translations> {
+	static const en = AppLocale(languageCode: 'en');
+	static const de = AppLocale(languageCode: 'de');
+	static const frFr = AppLocale(languageCode: 'fr', countryCode: 'FR');
+	static const List<AppLocale> values = [
+		en,
+		de,
+		frFr,
+	];
 
 	const AppLocale({
 		required this.languageCode,
-		this.scriptCode, // ignore: unused_element, unused_element_parameter
-		this.countryCode, // ignore: unused_element, unused_element_parameter
+		this.scriptCode,
+		this.countryCode,
 	});
 
 	@override final String languageCode;
@@ -49,27 +54,32 @@ enum AppLocale with BaseAppLocale<AppLocale, Translations> {
 		PluralResolver? cardinalResolver,
 		PluralResolver? ordinalResolver,
 	}) async {
-		switch (this) {
-			case AppLocale.en:
-				return TranslationsEn(
-					overrides: overrides,
-					cardinalResolver: cardinalResolver,
-					ordinalResolver: ordinalResolver,
-				);
-			case AppLocale.de:
-				await l_de.loadLibrary();
-				return l_de.TranslationsDe(
-					overrides: overrides,
-					cardinalResolver: cardinalResolver,
-					ordinalResolver: ordinalResolver,
-				);
-			case AppLocale.frFr:
-				await l_fr_FR.loadLibrary();
-				return l_fr_FR.TranslationsFrFr(
-					overrides: overrides,
-					cardinalResolver: cardinalResolver,
-					ordinalResolver: ordinalResolver,
-				);
+		if (this == AppLocale.en) {
+			return TranslationsEn(
+				overrides: overrides,
+				cardinalResolver: cardinalResolver,
+				ordinalResolver: ordinalResolver,
+			);
+		} else if (this == AppLocale.de) {
+			await l_de.loadLibrary();
+			return l_de.TranslationsDe(
+				overrides: overrides,
+				cardinalResolver: cardinalResolver,
+				ordinalResolver: ordinalResolver,
+			);
+		} else if (this == AppLocale.frFr) {
+			await l_fr_FR.loadLibrary();
+			return l_fr_FR.TranslationsFrFr(
+				overrides: overrides,
+				cardinalResolver: cardinalResolver,
+				ordinalResolver: ordinalResolver,
+			);
+		} else {
+			return TranslationsEn(
+				overrides: overrides,
+				cardinalResolver: cardinalResolver,
+				ordinalResolver: ordinalResolver,
+			);
 		}
 	}
 
@@ -79,30 +89,46 @@ enum AppLocale with BaseAppLocale<AppLocale, Translations> {
 		PluralResolver? cardinalResolver,
 		PluralResolver? ordinalResolver,
 	}) {
-		switch (this) {
-			case AppLocale.en:
-				return TranslationsEn(
-					overrides: overrides,
-					cardinalResolver: cardinalResolver,
-					ordinalResolver: ordinalResolver,
-				);
-			case AppLocale.de:
-				return l_de.TranslationsDe(
-					overrides: overrides,
-					cardinalResolver: cardinalResolver,
-					ordinalResolver: ordinalResolver,
-				);
-			case AppLocale.frFr:
-				return l_fr_FR.TranslationsFrFr(
-					overrides: overrides,
-					cardinalResolver: cardinalResolver,
-					ordinalResolver: ordinalResolver,
-				);
+		if (this == AppLocale.en) {
+			return TranslationsEn(
+				overrides: overrides,
+				cardinalResolver: cardinalResolver,
+				ordinalResolver: ordinalResolver,
+			);
+		} else if (this == AppLocale.de) {
+			return l_de.TranslationsDe(
+				overrides: overrides,
+				cardinalResolver: cardinalResolver,
+				ordinalResolver: ordinalResolver,
+			);
+		} else if (this == AppLocale.frFr) {
+			return l_fr_FR.TranslationsFrFr(
+				overrides: overrides,
+				cardinalResolver: cardinalResolver,
+				ordinalResolver: ordinalResolver,
+			);
+		} else {
+			return TranslationsEn(
+				overrides: overrides,
+				cardinalResolver: cardinalResolver,
+				ordinalResolver: ordinalResolver,
+			);
 		}
 	}
 
 	/// Gets current instance managed by [LocaleSettings].
 	Translations get translations => LocaleSettings.instance.getTranslations(this);
+
+	@override
+	bool operator ==(Object other) =>
+		identical(this, other) ||
+		(other is AppLocale &&
+			languageCode == other.languageCode &&
+			scriptCode == other.scriptCode &&
+			countryCode == other.countryCode);
+
+	@override
+	int get hashCode => Object.hash(languageCode, scriptCode, countryCode);
 }
 
 /// Method A: Simple
@@ -185,6 +211,7 @@ class AppLocaleUtils extends BaseAppLocaleUtils<AppLocale, Translations> {
 	AppLocaleUtils._() : super(
 		baseLocale: AppLocale.en,
 		locales: AppLocale.values,
+		dynamicBuilder: AppLocale.new,
 	);
 
 	static final instance = AppLocaleUtils._();

@@ -11,46 +11,33 @@ import 'package:slang/generated.dart';
 import 'strings_a.g.dart';
 
 // Path: <root>
-class TranslationsDe
-    with BaseTranslations<AppLocale, Translations>
-    implements Translations {
-  /// You can call this constructor and build your own translation instance of this locale.
-  /// Constructing via the enum [AppLocale.build] is preferred.
-  TranslationsDe(
-      {Map<String, Node>? overrides,
-      PluralResolver? cardinalResolver,
-      PluralResolver? ordinalResolver,
-      TranslationMetadata<AppLocale, Translations>? meta})
-      : assert(overrides == null,
-            'Set "translation_overrides: true" in order to enable this feature.'),
-        $meta = meta ??
-            TranslationMetadata(
-              locale: AppLocale.de,
-              overrides: overrides ?? {},
-              cardinalResolver: cardinalResolver,
-              ordinalResolver: ordinalResolver,
-            ) {
-    $meta.setFlatMapFunction(_flatMapFunction);
-  }
+class TranslationsDe with BaseTranslations<AppLocale, Translations> implements Translations {
+	/// You can call this constructor and build your own translation instance of this locale.
+	/// Constructing via the enum [AppLocale.build] is preferred.
+	TranslationsDe({Map<String, Node>? overrides, PluralResolver? cardinalResolver, PluralResolver? ordinalResolver, TranslationMetadata<AppLocale, Translations>? meta})
+		: assert(overrides == null, 'Set "translation_overrides: true" in order to enable this feature.'),
+		  $meta = meta ?? TranslationMetadata(
+		    locale: AppLocale.de,
+		    overrides: overrides ?? {},
+		    cardinalResolver: cardinalResolver,
+		    ordinalResolver: ordinalResolver,
+		  ) {
+		$meta.setFlatMapFunction(_flatMapFunction);
+	}
 
-  /// Metadata for the translations of <de>.
-  @override
-  final TranslationMetadata<AppLocale, Translations> $meta;
+	/// Metadata for the translations of <de>.
+	@override final TranslationMetadata<AppLocale, Translations> $meta;
 
-  /// Access flat map
-  @override
-  dynamic operator [](String key) => $meta.getTranslation(key);
+	/// Access flat map
+	@override dynamic operator[](String key) => $meta.getTranslation(key);
 
-  late final TranslationsDe _root = this; // ignore: unused_field
+	late final TranslationsDe _root = this; // ignore: unused_field
 
-  @override
-  TranslationsDe $copyWith(
-          {TranslationMetadata<AppLocale, Translations>? meta}) =>
-      TranslationsDe(meta: meta ?? this.$meta);
+	@override 
+	TranslationsDe $copyWith({TranslationMetadata<AppLocale, Translations>? meta}) => TranslationsDe(meta: meta ?? this.$meta);
 
-  // Translations
-  @override
-  String get title => 'Package A (de)';
+	// Translations
+	@override String get title => 'Package A (de)';
 }
 
 /// The flat map containing all translations for locale <de>.
@@ -59,10 +46,10 @@ class TranslationsDe
 /// The Dart AOT compiler has issues with very large switch statements,
 /// so the map is split into smaller functions (512 entries each).
 extension on TranslationsDe {
-  dynamic _flatMapFunction(String path) {
-    return switch (path) {
-      'title' => 'Package A (de)',
-      _ => null,
-    };
-  }
+	dynamic _flatMapFunction(String path) {
+		return switch (path) {
+			'title' => 'Package A (de)',
+			_ => null,
+		};
+	}
 }

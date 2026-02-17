@@ -17,24 +17,37 @@ abstract class BaseAppLocaleUtils<E extends BaseAppLocale<E, T>,
   /// Internal: The base locale
   final E baseLocale;
 
-  /// Internal: All locales, unordered
+  /// Internal: All locales, unordered.
+  /// This is a mutable list so dynamic locales can be appended at runtime.
   final List<E> locales;
 
   /// Internal: Used for translation overrides
   final BuildModelConfig? buildConfig;
 
+  /// Optional builder for creating dynamic locale instances at runtime.
+  /// When set and [parseLocaleParts] cannot find a matching locale,
+  /// this builder is called to create a new [E] instance instead of
+  /// falling back to [baseLocale].
+  final E Function({
+    required String languageCode,
+    String? scriptCode,
+    String? countryCode,
+  })? dynamicBuilder;
+
   BaseAppLocaleUtils({
     required this.baseLocale,
-    required this.locales,
+    required List<E> locales,
     this.buildConfig,
-  });
+    this.dynamicBuilder,
+  }) : locales = List<E>.of(locales);
 }
 
 // We use extension methods here to have a workaround for static members of the same name
 extension AppLocaleUtilsExt<E extends BaseAppLocale<E, T>,
     T extends BaseTranslations<E, T>> on BaseAppLocaleUtils<E, T> {
-  /// Parses the raw locale to get the enum.
-  /// Fallbacks to base locale.
+  /// Parses the raw locale to get the locale instance.
+  /// Fallbacks to base locale (or creates a dynamic locale if
+  /// [dynamicBuilder] is set).
   E parse(String rawLocale) {
     final match = RegexUtils.localeRegex.firstMatch(rawLocale);
     if (match == null) {
@@ -65,7 +78,8 @@ extension AppLocaleUtilsExt<E extends BaseAppLocale<E, T>,
   }
 
   /// Finds the locale type [E] which fits the locale parts the best.
-  /// Fallbacks to base locale.
+  /// Fallbacks to base locale (or creates a dynamic locale if [dynamicBuilder]
+  /// is set).
   E parseLocaleParts({
     required String languageCode,
     String? scriptCode,
@@ -92,10 +106,19 @@ extension AppLocaleUtilsExt<E extends BaseAppLocale<E, T>,
 
     if (candidates.isEmpty) {
       // no matching language, try match country code only
-      return locales.firstWhereOrNull((supported) {
-            return supported.countryCode == countryCode;
-          }) ??
-          baseLocale;
+      final countryMatch = locales.firstWhereOrNull((supported) {
+        return supported.countryCode == countryCode;
+      });
+      if (countryMatch != null) {
+        return countryMatch;
+      }
+
+      // No match at all — try dynamic builder
+      return _buildDynamicLocale(
+        languageCode: languageCode,
+        scriptCode: scriptCode,
+        countryCode: countryCode,
+      );
     }
 
     // There is at least a locale with matching language code
@@ -112,6 +135,27 @@ extension AppLocaleUtilsExt<E extends BaseAppLocale<E, T>,
           return candidate.countryCode == countryCode;
         }) ??
         fallback;
+  }
+
+  /// Creates a dynamic locale using [dynamicBuilder] and registers it,
+  /// or falls back to [baseLocale] if no builder is set.
+  E _buildDynamicLocale({
+    required String languageCode,
+    String? scriptCode,
+    String? countryCode,
+  }) {
+    final builder = dynamicBuilder;
+    if (builder == null) {
+      return baseLocale;
+    }
+
+    final dynamicLocale = builder(
+      languageCode: languageCode,
+      scriptCode: scriptCode,
+      countryCode: countryCode,
+    );
+    locales.add(dynamicLocale);
+    return dynamicLocale;
   }
 
   /// Gets supported locales in string format.

@@ -70,7 +70,7 @@ class TranslationMetadata<E extends BaseAppLocale<E, T>,
 
 /// Similar to flutter locale
 /// but available without any flutter dependencies.
-/// Subclasses will be enums.
+/// Subclasses may be enums or classes with static const values.
 abstract mixin class BaseAppLocale<E extends BaseAppLocale<E, T>,
     T extends BaseTranslations<E, T>> {
   String get languageCode;

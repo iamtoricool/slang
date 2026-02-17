@@ -109,6 +109,67 @@ void main() {
       );
     });
   });
+
+  group('dynamic locale interactions', () {
+    setUp(() {
+      GlobalLocaleState.instance.setLocale(_baseLocale);
+    });
+
+    test('should load a dynamically created locale', () async {
+      final dynamicUtils = _AppLocaleUtils(
+        dynamicBuilder: ({
+          required String languageCode,
+          String? scriptCode,
+          String? countryCode,
+        }) =>
+            FakeAppLocale(
+          languageCode: languageCode,
+          scriptCode: scriptCode,
+          countryCode: countryCode,
+        ),
+      );
+      final localeSettings = _LocaleSettings(utils: dynamicUtils);
+
+      // Parse a locale that doesn't exist — dynamicBuilder creates it
+      final dynamicLocale = dynamicUtils.parse('fr-FR');
+      expect(dynamicLocale.languageCode, 'fr');
+      expect(dynamicLocale.countryCode, 'FR');
+
+      // Load the dynamic locale
+      await localeSettings.loadLocale(dynamicLocale);
+      expect(localeSettings.translationMap.containsKey(dynamicLocale), isTrue);
+    });
+
+    test('should override translations for a dynamic locale', () async {
+      final dynamicUtils = _AppLocaleUtils(
+        dynamicBuilder: ({
+          required String languageCode,
+          String? scriptCode,
+          String? countryCode,
+        }) =>
+            FakeAppLocale(
+          languageCode: languageCode,
+          scriptCode: scriptCode,
+          countryCode: countryCode,
+        ),
+      );
+      final localeSettings = _LocaleSettings(utils: dynamicUtils);
+
+      final dynamicLocale = dynamicUtils.parse('fr-FR');
+
+      await localeSettings.overrideTranslationsFromMap(
+        locale: dynamicLocale,
+        isFlatMap: false,
+        map: {'hello': 'bonjour'},
+      );
+
+      expect(localeSettings.translationMap.containsKey(dynamicLocale), isTrue);
+      expect(
+        localeSettings.translationMap[dynamicLocale]!.$meta.overrides.keys,
+        ['hello'],
+      );
+    });
+  });
 }
 
 final _baseLocale = FakeAppLocale(languageCode: 'und');
@@ -117,7 +178,7 @@ final _localeB = FakeAppLocale(languageCode: 'bb');
 
 class _AppLocaleUtils
     extends BaseAppLocaleUtils<FakeAppLocale, FakeTranslations> {
-  _AppLocaleUtils()
+  _AppLocaleUtils({super.dynamicBuilder})
       : super(
           baseLocale: _baseLocale,
           locales: [_baseLocale, _localeA, _localeB],
@@ -146,5 +207,6 @@ class _AppLocaleUtils
 
 class _LocaleSettings
     extends BaseLocaleSettings<FakeAppLocale, FakeTranslations> {
-  _LocaleSettings() : super(utils: _AppLocaleUtils(), lazy: true);
+  _LocaleSettings({_AppLocaleUtils? utils})
+      : super(utils: utils ?? _AppLocaleUtils(), lazy: true);
 }
