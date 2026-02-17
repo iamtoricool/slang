@@ -90,7 +90,7 @@ Future<void> runAnalyzeTranslations({
     result: missingTranslationsResult,
   );
 
-  final unusedTranslationsResult = getUnusedTranslations(
+  final unusedTranslationsResult = await getUnusedTranslations(
     baseTranslations: baseTranslations,
     rawConfig: rawConfig,
     translations: translationModelList,
@@ -155,20 +155,20 @@ Map<I18nLocale, Map<String, dynamic>> getMissingTranslations({
   return result;
 }
 
-Map<I18nLocale, Map<String, dynamic>> getUnusedTranslations({
+Future<Map<I18nLocale, Map<String, dynamic>>> getUnusedTranslations({
   required I18nData baseTranslations,
   required RawConfig rawConfig,
   required List<I18nData> translations,
   required bool full,
   List<String>? sourceDirs,
-}) {
+}) async {
   // use translation model and find missing translations
   Map<I18nLocale, Map<String, dynamic>> result = {};
   for (final localeData in translations) {
     if (localeData.base) {
       if (full) {
         // scans the whole source code
-        result[localeData.locale] = _getUnusedTranslationsInSourceCode(
+        result[localeData.locale] = await _getUnusedTranslationsInSourceCode(
           translateVar: rawConfig.translateVar,
           baseModel: localeData,
           sourceDirs: sourceDirs ?? ['lib'],
@@ -351,11 +351,11 @@ bool _checkEquality(Node a, Node b) {
 }
 
 /// Scans the whole source code and returns all unused translations
-Map<String, dynamic> _getUnusedTranslationsInSourceCode({
+Future<Map<String, dynamic>> _getUnusedTranslationsInSourceCode({
   required String translateVar,
   required I18nData baseModel,
   required List<String> sourceDirs,
-}) {
+}) async {
   final resultMap = <String, dynamic>{};
 
   // Collect all used translation paths using AST analysis
@@ -382,7 +382,7 @@ Map<String, dynamic> _getUnusedTranslationsInSourceCode({
   // Analyze each file to find used translation paths
   for (final file in files) {
     try {
-      final usedPaths = analyzer.analyzeFile(file.path);
+      final usedPaths = await analyzer.analyzeFile(file.path);
       allUsedPaths.addAll(usedPaths);
     } catch (e) {
       log.verbose('Failed to analyze file ${file.path}: $e');

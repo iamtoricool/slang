@@ -11,7 +11,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('getMissingTranslations', () {
-    test('Should find missing translations', () {
+    test('Should find missing translations', () async {
       final result = _getMissingTranslations({
         'en': {
           'a': 'A',
@@ -25,7 +25,7 @@ void main() {
       expect(result[I18nLocale(language: 'de')], {'b': 'B'});
     });
 
-    test('Should respect ignoreMissing flag', () {
+    test('Should respect ignoreMissing flag', () async {
       final result = _getMissingTranslations({
         'en': {
           'a': 'A',
@@ -39,7 +39,7 @@ void main() {
       expect(result[I18nLocale(language: 'de')], isEmpty);
     });
 
-    test('Should respect OUTDATED flag', () {
+    test('Should respect OUTDATED flag', () async {
       final result = _getMissingTranslations({
         'en': {
           'a': 'A EN',
@@ -52,7 +52,7 @@ void main() {
       expect(result[I18nLocale(language: 'de')], {'a(OUTDATED)': 'A EN'});
     });
 
-    test('Should ignore ignoreUnused flag', () {
+    test('Should ignore ignoreUnused flag', () async {
       final result = _getMissingTranslations({
         'en': {
           'a': 'A',
@@ -66,7 +66,7 @@ void main() {
       expect(result[I18nLocale(language: 'de')], {'b(ignoreUnused)': 'B'});
     });
 
-    test('Should find missing enum', () {
+    test('Should find missing enum', () async {
       final result = _getMissingTranslations({
         'en': {
           'a': 'A',
@@ -95,8 +95,8 @@ void main() {
   });
 
   group('getUnusedTranslations', () {
-    test('Should find unused translations', () {
-      final result = _getUnusedTranslations({
+    test('Should find unused translations', () async {
+      final result = await _getUnusedTranslations({
         'en': {
           'a': 'A',
         },
@@ -109,8 +109,8 @@ void main() {
       expect(result[I18nLocale(language: 'de')], {'b': 'B'});
     });
 
-    test('Should respect ignoreUnused flag', () {
-      final result = _getUnusedTranslations({
+    test('Should respect ignoreUnused flag', () async {
+      final result = await _getUnusedTranslations({
         'en': {
           'a': 'A',
         },
@@ -123,8 +123,8 @@ void main() {
       expect(result[I18nLocale(language: 'de')], isEmpty);
     });
 
-    test('Should ignore ignoreMissing flag', () {
-      final result = _getUnusedTranslations({
+    test('Should ignore ignoreMissing flag', () async {
+      final result = await _getUnusedTranslations({
         'en': {
           'a': 'A',
         },
@@ -137,8 +137,8 @@ void main() {
       expect(result[I18nLocale(language: 'de')], {'b(ignoreMissing)': 'B'});
     });
 
-    test('Should ignore unused but linked translations', () {
-      final result = _getUnusedTranslations({
+    test('Should ignore unused but linked translations', () async {
+      final result = await _getUnusedTranslations({
         'en': {
           'a': 'A',
         },
@@ -165,7 +165,7 @@ void main() {
       }
     });
 
-    test('detects direct translation usage', () {
+    test('detects direct translation usage', () async {
       final code = '''
         void main() {
           print(t.mainScreen.title);
@@ -176,13 +176,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('mainScreen.subtitle'));
     });
 
-    test('detects simple variable assignment and usage', () {
+    test('detects simple variable assignment and usage', () async {
       final code = '''
         void main() {
           final title = t.mainScreen.title;
@@ -196,13 +196,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('mainScreen.subtitle'));
     });
 
-    test('detects nested variable assignment', () {
+    test('detects nested variable assignment', () async {
       final code = '''
         void main() {
           final screen = t.mainScreen;
@@ -217,13 +217,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('mainScreen.subtitle'));
     });
 
-    test('detects context.t usage', () {
+    test('detects context.t usage', () async {
       final code = '''
         void main(BuildContext context) {
           print(context.t.mainScreen.title);
@@ -234,13 +234,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('mainScreen.subtitle'));
     });
 
-    test('detects complex nested property access', () {
+    test('detects complex nested property access', () async {
       final code = '''
         void main() {
           final app = t.app;
@@ -258,13 +258,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('app.screen.dialog.title'));
       expect(usedPaths, contains('app.screen.dialog.message'));
     });
 
-    test('handles mixed usage patterns', () {
+    test('handles mixed usage patterns', () async {
       final code = '''
         void main(BuildContext context) {
           // Direct usage
@@ -290,7 +290,7 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('direct.title'));
       expect(usedPaths, contains('mainScreen.header.title'));
@@ -298,7 +298,7 @@ void main() {
       expect(usedPaths, contains('nested.deep.very.value'));
     });
 
-    test('ignores unused translations', () {
+    test('ignores unused translations', () async {
       final code = '''
         void main() {
           final used = t.mainScreen.title;
@@ -311,13 +311,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, isNot(contains('mainScreen.subtitle')));
     });
 
-    test('handles function parameters', () {
+    test('handles function parameters', () async {
       final code = '''
         void main() {
           final title = t.mainScreen.title;
@@ -332,12 +332,12 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
     });
 
-    test('handles variable reassignment', () {
+    test('handles variable reassignment', () async {
       final code = '''
         void main() {
           var title = t.mainScreen.title;
@@ -351,13 +351,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('otherScreen.title'));
     });
 
-    test('handles conditional expressions', () {
+    test('handles conditional expressions', () async {
       final code = '''
         void main() {
           final isMain = true;
@@ -369,13 +369,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('otherScreen.title'));
     });
 
-    test('detects method invocations (plurals/wip)', () {
+    test('detects method invocations (plurals/wip)', () async {
       final code = '''
         void main() {
           // Method invocation
@@ -390,14 +390,15 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('myPlural'));
       expect(usedPaths, contains('\$wip'));
       expect(usedPaths, contains('section.myContext'));
     });
 
-    test('clears variable state between files (no cross-file leaking)', () {
+    test('clears variable state between files (no cross-file leaking)',
+        () async {
       // File A defines a variable `screen = t.mainScreen`
       final codeA = '''
         void main() {
@@ -421,11 +422,12 @@ void main() {
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
 
       // Analyze file A first — records `screen -> mainScreen`
-      final pathsAfterA = Set<String>.from(analyzer.analyzeFile(fileA.path));
+      final pathsAfterA =
+          Set<String>.from(await analyzer.analyzeFile(fileA.path));
       expect(pathsAfterA, contains('mainScreen.title'));
 
       // Analyze file B — `screen` in B is NOT a translation variable
-      final pathsAfterB = analyzer.analyzeFile(fileB.path);
+      final pathsAfterB = await analyzer.analyzeFile(fileB.path);
 
       // mainScreen.title should still be present (accumulated from file A)
       expect(pathsAfterB, contains('mainScreen.title'));
@@ -435,7 +437,7 @@ void main() {
       expect(pathsAfterB.difference(pathsAfterA), isEmpty);
     });
 
-    test('handles root aliasing (final t2 = t)', () {
+    test('handles root aliasing (final t2 = t)', () async {
       final code = '''
         void main() {
           final t2 = t;
@@ -447,13 +449,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('settings.language'));
     });
 
-    test('handles chained root aliasing (final t3 = t2 = t)', () {
+    test('handles chained root aliasing (final t3 = t2 = t)', () async {
       final code = '''
         void main() {
           final t2 = t;
@@ -465,12 +467,12 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
     });
 
-    test('handles variable shadowing (final t = "hello")', () {
+    test('handles variable shadowing (final t = "hello")', () async {
       final code = '''
         void main() {
           final t = 'hello';
@@ -481,13 +483,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       // t.length should NOT be detected as a translation path
       expect(usedPaths, isNot(contains('length')));
     });
 
-    test('shadowing is per-file and does not persist', () {
+    test('shadowing is per-file and does not persist', () async {
       // File A shadows t
       final codeA = '''
         void main() {
@@ -507,15 +509,16 @@ void main() {
       fileB.writeAsStringSync(codeB);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      analyzer.analyzeFile(fileA.path);
-      analyzer.analyzeFile(fileB.path);
+      await analyzer.analyzeFile(fileA.path);
+      await analyzer.analyzeFile(fileB.path);
 
-      expect(analyzer.analyzeFile(fileB.path), contains('mainScreen.title'));
+      expect(
+          await analyzer.analyzeFile(fileB.path), contains('mainScreen.title'));
       // length from file A should NOT be present
-      expect(analyzer.analyzeFile(fileA.path), isNot(contains('length')));
+      expect(await analyzer.analyzeFile(fileA.path), isNot(contains('length')));
     });
 
-    test('detects usage in string interpolation', () {
+    test('detects usage in string interpolation', () async {
       final code = '''
         void main() {
           print('Hello \${t.greeting}');
@@ -526,13 +529,13 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('greeting'));
       expect(usedPaths, contains('mainScreen.title'));
     });
 
-    test('detects usage in collection literals', () {
+    test('detects usage in collection literals', () async {
       final code = '''
         void main() {
           final list = [t.a.x, t.b.y];
@@ -544,7 +547,7 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('a.x'));
       expect(usedPaths, contains('b.y'));
@@ -552,7 +555,7 @@ void main() {
       expect(usedPaths, contains('d.w'));
     });
 
-    test('detects usage in lambdas and closures', () {
+    test('detects usage in lambdas and closures', () async {
       final code = '''
         void main() {
           final fn = () => t.mainScreen.title;
@@ -566,14 +569,14 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('mainScreen.subtitle'));
       expect(usedPaths, contains('settings.language'));
     });
 
-    test('detects usage in class fields and top-level variables', () {
+    test('detects usage in class fields and top-level variables', () async {
       final code = '''
         final topLevel = t.app.name;
 
@@ -587,14 +590,14 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('app.name'));
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('mainScreen.subtitle'));
     });
 
-    test('works with custom translateVar', () {
+    test('works with custom translateVar', () async {
       final code = '''
         void main() {
           print(translations.mainScreen.title);
@@ -606,7 +609,7 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 'translations');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('mainScreen.title'));
       expect(usedPaths, contains('mainScreen.subtitle'));
@@ -614,27 +617,27 @@ void main() {
       expect(usedPaths, isNot(contains('translations.mainScreen.title')));
     });
 
-    test('handles empty file gracefully', () {
+    test('handles empty file gracefully', () async {
       final testFile = File('${tempDir.path}/empty.dart');
       testFile.writeAsStringSync('');
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, isEmpty);
     });
 
-    test('handles malformed file gracefully', () {
+    test('handles malformed file gracefully', () async {
       final testFile = File('${tempDir.path}/bad.dart');
       testFile.writeAsStringSync('this is not valid dart {{{{');
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
       // Should not throw
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
       expect(usedPaths, isA<Set<String>>());
     });
 
-    test('detects translation path, not method chain on result', () {
+    test('detects translation path, not method chain on result', () async {
       final code = '''
         void main() {
           print(t.mainScreen.title.toUpperCase());
@@ -645,7 +648,7 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       // Should detect the translation path portion
       // Due to AST toString-based path extraction, the full chain is recorded.
@@ -662,7 +665,7 @@ void main() {
       );
     });
 
-    test('root alias with method invocation', () {
+    test('root alias with method invocation', () async {
       final code = '''
         void main() {
           final t2 = t;
@@ -673,7 +676,7 @@ void main() {
       testFile.writeAsStringSync(code);
 
       final analyzer = TranslationUsageAnalyzer(translateVar: 't');
-      final usedPaths = analyzer.analyzeFile(testFile.path);
+      final usedPaths = await analyzer.analyzeFile(testFile.path);
 
       expect(usedPaths, contains('myPlural'));
     });
@@ -690,11 +693,11 @@ Map<I18nLocale, Map<String, dynamic>> _getMissingTranslations(
   );
 }
 
-Map<I18nLocale, Map<String, dynamic>> _getUnusedTranslations(
+Future<Map<I18nLocale, Map<String, dynamic>>> _getUnusedTranslations(
   Map<String, Map<String, dynamic>> translations,
-) {
+) async {
   final existing = _buildTranslations(translations);
-  return getUnusedTranslations(
+  return await getUnusedTranslations(
     baseTranslations: findBaseTranslations(RawConfig.defaultConfig, existing),
     rawConfig: RawConfig.defaultConfig,
     translations: _buildTranslations(translations),
