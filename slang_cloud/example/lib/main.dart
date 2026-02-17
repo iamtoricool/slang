@@ -1,4 +1,5 @@
-import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:slang_cloud/slang_cloud.dart';
 import 'package:http/http.dart' as http;
@@ -9,18 +10,30 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   LocaleSettings.useDeviceLocale();
 
+  // Determine the base URL based on the platform.
+  // Android emulator needs 10.0.2.2 to access the host machine's localhost.
+  String baseUrl = 'http://localhost:3000';
+  if (!kIsWeb && Platform.isAndroid) {
+    baseUrl = 'http://10.0.2.2:3000';
+  }
+
   runApp(
     CloudTranslationProvider(
-      config: SlangCloudConfig(baseUrl: 'https://fake-api.com'),
-      client: DemoMockClient(), // Injects the fake server response
-      overrideCallback: (locale, isFlatMap, map) async {
-        final appLocale = AppLocaleUtils.parse(locale);
-        await LocaleSettings.instance.overrideTranslationsFromMap(
-          locale: appLocale,
-          isFlatMap: isFlatMap,
-          map: map,
-        );
-      },
+      config: SlangCloudConfig(baseUrl: baseUrl),
+      // client: DemoMockClient(), // Uncomment to use the mock client instead of the real server
+      localeStream: LocaleSettings.getLocaleStream(),
+      localeGetter: (context) => LocaleSettings
+          .currentLocale
+          .languageCode, // Add localeGetter for robustness
+      overrideCallback:
+          ({required locale, required isFlatMap, required map}) async {
+            final appLocale = AppLocaleUtils.parse(locale);
+            await LocaleSettings.instance.overrideTranslationsFromMap(
+              locale: appLocale,
+              isFlatMap: isFlatMap,
+              map: map,
+            );
+          },
       child: TranslationProvider(child: const MainApp()),
     ),
   );
@@ -31,67 +44,73 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Watch cloud state
+    final cloudState = CloudTranslationProvider.of(context);
+
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(title: Text(context.t.main.title)),
+        appBar: AppBar(
+          title: Text(context.t.main.title),
+          actions: [
+            // Status Indicator
+            if (cloudState.status == CloudStatus.checking ||
+                cloudState.status == CloudStatus.downloading)
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            else if (cloudState.status == CloudStatus.error)
+              const Icon(Icons.error, color: Colors.red),
+          ],
+        ),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(context.t.main.description),
               const SizedBox(height: 20),
+
+              // Language Switcher Demo
               ElevatedButton(
                 onPressed: () {
-                  // Manually check for updates logic can be added here if exposed via Provider/Context
-                  // For this demo, update happens on start.
-                  // We could use a key to rebuild the provider to force a re-check.
+                  // This triggers the stream, which triggers CloudTranslationProvider to update
+                  LocaleSettings.setLocale(AppLocale.en);
                 },
-                child: Text(context.t.main.button),
+                child: const Text("Set Locale to EN (Trigger Update)"),
               ),
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () {
+                  // Manual trigger via controller
+                  CloudTranslationProvider.get(context).checkForUpdates();
+                },
+                child: const Text("Force Check Updates"),
+              ),
+              const SizedBox(height: 10),
+              const Divider(),
+              const Text("Supported Languages (Server):"),
+              if (cloudState.supportedLanguages.isEmpty)
+                const Text("Fetching...")
+              else
+                ...cloudState.supportedLanguages.map(
+                  (lang) => ListTile(
+                    title: Text(lang.name),
+                    subtitle: Text(lang.nativeName ?? ''),
+                    trailing: Text(lang.code),
+                    onTap: () => LocaleSettings.setLocaleRaw(lang.code),
+                  ),
+                ),
             ],
           ),
         ),
       ),
     );
   }
-}
-
-/// A Mock Client that simulates the Slang Cloud backend.
-class DemoMockClient extends MockClient {
-  DemoMockClient()
-    : super((request) async {
-        // 1. Check Version (HEAD /translations/en)
-        if (request.method == 'HEAD' &&
-            request.url.path.contains('/translations/en')) {
-          print('[MockClient] Checking for updates...');
-          // Simulating a newer version (hash: v2)
-          return Future.delayed(
-            Durations.extralong4,
-            () => http.Response(
-              '',
-              200,
-              headers: {'x-translation-hash': 'v2_hash_12345'},
-            ),
-          );
-        }
-
-        // 2. Fetch Translation (GET /translations/en)
-        if (request.method == 'GET' &&
-            request.url.path.contains('/translations/en')) {
-          print('[MockClient] Fetching new translations...');
-          final newTranslations = {
-            "main": {
-              "title": "Slang Cloud Demo (UPDATED)",
-              "description": "This text was fetched from the cloud!",
-              "button": "Updated Successfully",
-            },
-          };
-          return Future.delayed(
-            Durations.extralong4,
-            () => http.Response(jsonEncode(newTranslations), 200),
-          );
-        }
-
-        return http.Response('Not Found', 404);
-      });
 }

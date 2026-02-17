@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:slang_cloud/src/config.dart';
 import 'package:slang_cloud/src/storage.dart';
+import 'package:slang_cloud/src/model.dart';
 
 /// Handles communication with the Slang Cloud backend.
 class SlangCloudClient {
@@ -59,5 +60,20 @@ class SlangCloudClient {
       debugPrint('SlangCloud: Failed to fetch translation: $e');
     }
     return null;
+  }
+
+  /// Fetches the list of supported languages.
+  Future<List<SlangLanguage>> fetchLanguages() async {
+    final url = Uri.parse('${config.baseUrl}${config.languagesEndpoint}');
+    try {
+      final response = await _client.get(url, headers: config.headers);
+      if (response.statusCode == 200) {
+        final List<dynamic> list = jsonDecode(utf8.decode(response.bodyBytes));
+        return list.map((e) => SlangLanguage.fromJson(e as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('SlangCloud: Failed to fetch languages: $e');
+    }
+    return [];
   }
 }

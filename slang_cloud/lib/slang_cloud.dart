@@ -5,3 +5,4 @@ export 'src/client.dart';
 export 'src/config.dart';
 export 'src/provider.dart';
 export 'src/storage.dart';
+export 'src/model.dart';
