@@ -2,11 +2,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:slang_cloud/slang_cloud.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'i18n/strings.g.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LocaleSettings.useDeviceLocale();
 
@@ -17,23 +15,22 @@ void main() {
     baseUrl = 'http://10.0.2.2:3000';
   }
 
+  // Create controller instance (non-singleton)
+  final controller = CloudTranslationController(
+    config: SlangCloudConfig(baseUrl: baseUrl),
+  );
+
   runApp(
     CloudTranslationProvider(
-      config: SlangCloudConfig(baseUrl: baseUrl),
-      // client: DemoMockClient(), // Uncomment to use the mock client instead of the real server
-      localeStream: LocaleSettings.getLocaleStream(),
-      localeGetter: (context) => LocaleSettings
-          .currentLocale
-          .languageCode, // Add localeGetter for robustness
-      overrideCallback:
-          ({required locale, required isFlatMap, required map}) async {
-            final appLocale = AppLocaleUtils.parse(locale);
-            await LocaleSettings.instance.overrideTranslationsFromMap(
-              locale: appLocale,
-              isFlatMap: isFlatMap,
-              map: map,
-            );
-          },
+      controller: controller,
+      onTranslationsReceived: (localeCode, translations, isFlatMap) async {
+        final appLocale = AppLocaleUtils.parse(localeCode);
+        await LocaleSettings.instance.overrideTranslationsFromMap(
+          locale: appLocale,
+          map: translations,
+          isFlatMap: isFlatMap,
+        );
+      },
       child: TranslationProvider(child: const MainApp()),
     ),
   );
@@ -44,73 +41,177 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Watch cloud state
-    final cloudState = CloudTranslationProvider.of(context);
-
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(
           title: Text(context.t.main.title),
-          actions: [
-            // Status Indicator
-            if (cloudState.status == CloudStatus.checking ||
-                cloudState.status == CloudStatus.downloading)
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                ),
-              )
-            else if (cloudState.status == CloudStatus.error)
-              const Icon(Icons.error, color: Colors.red),
+          actions: const [
+            // Status indicator
+            _CloudStatusIndicator(),
           ],
         ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(context.t.main.description),
-              const SizedBox(height: 20),
-
-              // Language Switcher Demo
-              ElevatedButton(
-                onPressed: () {
-                  // This triggers the stream, which triggers CloudTranslationProvider to update
-                  LocaleSettings.setLocale(AppLocale.en);
-                },
-                child: const Text("Set Locale to EN (Trigger Update)"),
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: () {
-                  // Manual trigger via controller
-                  CloudTranslationProvider.get(context).checkForUpdates();
-                },
-                child: const Text("Force Check Updates"),
-              ),
-              const SizedBox(height: 10),
-              const Divider(),
-              const Text("Supported Languages (Server):"),
-              if (cloudState.supportedLanguages.isEmpty)
-                const Text("Fetching...")
-              else
-                ...cloudState.supportedLanguages.map(
-                  (lang) => ListTile(
-                    title: Text(lang.name),
-                    subtitle: Text(lang.nativeName ?? ''),
-                    trailing: Text(lang.code),
-                    onTap: () => LocaleSettings.setLocaleRaw(lang.code),
-                  ),
-                ),
-            ],
-          ),
-        ),
+        body: const _LanguageSelector(),
       ),
     );
+  }
+}
+
+/// Widget that displays the current cloud sync status
+class _CloudStatusIndicator extends StatelessWidget {
+  const _CloudStatusIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = CloudTranslationProvider.of(context).value;
+
+    if (state is CloudLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(16.0),
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+}
+
+/// Widget that handles language selection
+class _LanguageSelector extends StatelessWidget {
+  const _LanguageSelector();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = CloudTranslationProvider.of(context);
+    final state = controller.value;
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(context.t.main.description),
+          const SizedBox(height: 20),
+
+          // Language buttons (hardcoded for demo)
+          _LanguageButton(
+            label: 'English',
+            localeCode: 'en',
+            isCurrent: state.currentLocale == 'en',
+          ),
+          const SizedBox(height: 10),
+          _LanguageButton(
+            label: 'German',
+            localeCode: 'de',
+            isCurrent: state.currentLocale == 'de',
+          ),
+          const SizedBox(height: 10),
+
+          // Check for updates button
+          ElevatedButton.icon(
+            onPressed: () => _checkForUpdates(context),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Check for Updates'),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Display current locale info
+          if (state.currentLocale != null)
+            Text(
+              'Current: ${state.currentLocale}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          if (state.lastUpdated != null)
+            Text(
+              'Last updated: ${state.lastUpdated}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _checkForUpdates(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = CloudTranslationProvider.of(context);
+
+    try {
+      await controller.checkForUpdates();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Checked for updates'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to check updates: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+/// Reusable language button widget
+class _LanguageButton extends StatelessWidget {
+  final String label;
+  final String localeCode;
+  final bool isCurrent;
+
+  const _LanguageButton({
+    required this.label,
+    required this.localeCode,
+    required this.isCurrent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final state = CloudTranslationProvider.of(context).value;
+    final isLoading = state.isLoading;
+
+    return ElevatedButton(
+      onPressed: isLoading ? null : () => _switchLocale(context, localeCode),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isCurrent ? Colors.green : null,
+        minimumSize: const Size(200, 48),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          if (isCurrent) ...[
+            const SizedBox(width: 8),
+            const Icon(Icons.check, size: 16),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _switchLocale(BuildContext context, String localeCode) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final controller = CloudTranslationProvider.of(context);
+
+    try {
+      await controller.setLanguage(localeCode);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Successfully switched to $localeCode'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Failed to switch locale: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

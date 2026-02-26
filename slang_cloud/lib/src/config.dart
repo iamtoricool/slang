@@ -7,29 +7,36 @@ class SlangCloudConfig {
   /// The path to the translations endpoint.
   /// The '{locale}' placeholder will be replaced with the target locale.
   /// Default: '/translations/{locale}'
-  final String translationEndpoint;
+  final String endpoint;
 
-  /// The path to the languages list endpoint (optional).
-  /// Default: '/languages'
-  final String languagesEndpoint;
+  /// The header key for the translation hash/version.
+  /// Default: 'X-Translation-Hash'
+  final String hashHeader;
 
   /// Custom headers to send with the requests (e.g. Authorization).
   final Map<String, String> headers;
 
-  /// Whether to use a GET or HEAD request to check for updates.
-  /// Default: true (HEAD)
-  final bool versionCheckViaHead;
+  /// Request timeout duration.
+  /// Default: 30 seconds
+  final Duration timeout;
 
-  /// The header key for the translation hash/version.
-  /// Default: 'X-Translation-Hash'
-  final String versionHeader;
+  /// Whether the translation JSON is in flat map format.
+  /// When true, expects format like {"main.title": "value"}
+  /// When false (default), expects nested format like {"main": {"title": "value"}}
+  final bool isFlatMap;
 
   const SlangCloudConfig({
     required this.baseUrl,
-    this.translationEndpoint = '/translations/{locale}',
-    this.languagesEndpoint = '/languages',
+    this.endpoint = '/translations/{locale}',
+    this.hashHeader = 'X-Translation-Hash',
     this.headers = const {},
-    this.versionCheckViaHead = true,
-    this.versionHeader = 'X-Translation-Hash',
+    this.timeout = const Duration(seconds: 30),
+    this.isFlatMap = false,
   });
+
+  /// Builds the full URL for a given locale.
+  String buildUrl(String locale) {
+    final path = endpoint.replaceAll('{locale}', locale);
+    return '$baseUrl$path';
+  }
 }

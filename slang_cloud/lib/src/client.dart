@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:slang_cloud/src/config.dart';
 import 'package:slang_cloud/src/storage.dart';
-import 'package:slang_cloud/src/model.dart';
 
 /// Handles communication with the Slang Cloud backend.
+///
+/// Flow:
+/// 1. HEAD request to check for updates (hash in header)
+/// 2. GET request to download (stream for large files)
+/// 3. Content-Type detection: JSON vs file download
 class SlangCloudClient {
   final SlangCloudConfig config;
   final SlangCloudStorage storage;
@@ -17,63 +22,90 @@ class SlangCloudClient {
     http.Client? client,
   }) : _client = client ?? http.Client();
 
-  /// Checks for updates for the given [locale].
-  /// Returns the new version hash if an update is available, null otherwise.
+  /// Disposes the internal HTTP client.
+  void dispose() {
+    _client.close();
+  }
+
+  /// Checks for updates using HEAD request.
+  /// Returns the server hash if different from cached, null if up-to-date.
   Future<String?> checkForUpdate(String locale) async {
-    final url = Uri.parse('${config.baseUrl}${config.translationEndpoint.replaceAll('{locale}', locale)}');
-    final method = config.versionCheckViaHead ? 'HEAD' : 'GET';
+    final url = Uri.parse(config.buildUrl(locale));
 
     try {
-      final response = await _client.send(http.Request(method, url)..headers.addAll(config.headers));
+      final request = http.Request('HEAD', url)..headers.addAll(config.headers);
 
-      if (response.statusCode == 200) {
-        final serverHash = response.headers[config.versionHeader.toLowerCase()];
+      final streamedResponse = await _client.send(request).timeout(config.timeout);
+
+      if (streamedResponse.statusCode >= 200 && streamedResponse.statusCode < 300) {
+        final serverHash = streamedResponse.headers[config.hashHeader.toLowerCase()];
         if (serverHash == null) {
-          // If the header is missing, we assume no update is possible via hash check.
-          // Or should we throw? Let's log/print for now and return null.
-          debugPrint('Warning: Missing version header ${config.versionHeader} in response from $url');
+          debugPrint('SlangCloud: Missing ${config.hashHeader} header in HEAD response');
           return null;
         }
 
-        final localHash = await storage.getVersion(locale);
-        if (localHash != serverHash) {
+        final cachedHash = await storage.getVersion(locale);
+        if (cachedHash != serverHash) {
           return serverHash;
         }
       }
+    } on TimeoutException {
+      debugPrint('SlangCloud: HEAD request timed out for $locale');
     } catch (e) {
-      // Network error, ignore update check
       debugPrint('SlangCloud: Failed to check for updates: $e');
     }
     return null;
   }
 
-  /// Fetches the translation JSON for the given [locale].
-  Future<String?> fetchTranslation(String locale) async {
-    final url = Uri.parse('${config.baseUrl}${config.translationEndpoint.replaceAll('{locale}', locale)}');
+  /// Downloads translation using stream (supports large files).
+  /// Returns the content as string.
+  ///
+  /// Supports:
+  /// - JSON response (Content-Type: application/json)
+  /// - File download (any other Content-Type)
+  Future<String?> downloadTranslation(String locale) async {
+    final url = Uri.parse(config.buildUrl(locale));
 
     try {
-      final response = await _client.get(url, headers: config.headers);
-      if (response.statusCode == 200) {
-        return utf8.decode(response.bodyBytes);
-      }
-    } catch (e) {
-      debugPrint('SlangCloud: Failed to fetch translation: $e');
-    }
-    return null;
-  }
+      final request = http.Request('GET', url)..headers.addAll(config.headers);
 
-  /// Fetches the list of supported languages.
-  Future<List<SlangLanguage>> fetchLanguages() async {
-    final url = Uri.parse('${config.baseUrl}${config.languagesEndpoint}');
-    try {
-      final response = await _client.get(url, headers: config.headers);
-      if (response.statusCode == 200) {
-        final List<dynamic> list = jsonDecode(utf8.decode(response.bodyBytes));
-        return list.map((e) => SlangLanguage.fromJson(e as Map<String, dynamic>)).toList();
+      final streamedResponse = await _client.send(request).timeout(config.timeout);
+
+      if (streamedResponse.statusCode < 200 || streamedResponse.statusCode >= 300) {
+        debugPrint('SlangCloud: Download failed with status ${streamedResponse.statusCode}');
+        return null;
       }
+
+      final contentType = streamedResponse.headers['content-type']?.toLowerCase() ?? '';
+
+      // Stream download to handle large files
+      final bytes = await streamedResponse.stream.toBytes();
+
+      // Try to decode as UTF-8 (works for both JSON and text files)
+      try {
+        final content = utf8.decode(bytes);
+
+        // Validate JSON if content-type indicates JSON
+        if (contentType.contains('application/json')) {
+          try {
+            jsonDecode(content); // Validate JSON structure
+          } catch (e) {
+            debugPrint('SlangCloud: Invalid JSON response: $e');
+            return null;
+          }
+        }
+
+        return content;
+      } catch (e) {
+        debugPrint('SlangCloud: Failed to decode response as UTF-8: $e');
+        return null;
+      }
+    } on TimeoutException {
+      debugPrint('SlangCloud: Download request timed out for $locale');
+      return null;
     } catch (e) {
-      debugPrint('SlangCloud: Failed to fetch languages: $e');
+      debugPrint('SlangCloud: Failed to download translation: $e');
+      return null;
     }
-    return [];
   }
 }

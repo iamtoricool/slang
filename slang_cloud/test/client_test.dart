@@ -49,7 +49,7 @@ void main() {
       expect(result, isNull);
     });
 
-    test('fetchTranslation returns body on success', () async {
+    test('downloadTranslation returns body on success', () async {
       final client = SlangCloudClient(
         config: config,
         storage: storage,
@@ -61,7 +61,7 @@ void main() {
         }),
       );
 
-      final result = await client.fetchTranslation('en');
+      final result = await client.downloadTranslation('en');
       expect(result, '{"hello": "world"}');
     });
   });

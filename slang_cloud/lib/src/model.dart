@@ -1,62 +1,24 @@
-/// Represents a language item fetched from the server.
-class SlangLanguage {
-  final String code;
-  final String name;
-  final String? nativeName;
+/// Minimal cloud state - sealed class pattern.
+/// Only two states: Loading and Ready.
+sealed class CloudState {
+  /// Last successfully set locale (null until first success)
+  final String? currentLocale;
 
-  const SlangLanguage({
-    required this.code,
-    required this.name,
-    this.nativeName,
-  });
-
-  factory SlangLanguage.fromJson(Map<String, dynamic> json) {
-    return SlangLanguage(
-      code: json['code'] as String,
-      name: json['name'] as String,
-      nativeName: json['nativeName'] as String?,
-    );
-  }
-}
-
-/// The current status of the cloud synchronization.
-enum CloudStatus {
-  idle,
-  checking,
-  downloading,
-  success,
-  error,
-}
-
-/// The state snapshot exposed to the UI.
-class SlangCloudState {
-  final CloudStatus status;
-  final Object? error;
-  final StackTrace? stackTrace;
-  final List<SlangLanguage> supportedLanguages;
+  /// When the locale was last successfully updated
   final DateTime? lastUpdated;
 
-  const SlangCloudState({
-    required this.status,
-    this.error,
-    this.stackTrace,
-    this.supportedLanguages = const [],
-    this.lastUpdated,
-  });
+  const CloudState({this.currentLocale, this.lastUpdated});
 
-  SlangCloudState copyWith({
-    CloudStatus? status,
-    Object? error,
-    StackTrace? stackTrace,
-    List<SlangLanguage>? supportedLanguages,
-    DateTime? lastUpdated,
-  }) {
-    return SlangCloudState(
-      status: status ?? this.status,
-      error: error, // Can be set to null explicitly if not passed, but here we usually just replace it.
-      stackTrace: stackTrace,
-      supportedLanguages: supportedLanguages ?? this.supportedLanguages,
-      lastUpdated: lastUpdated ?? this.lastUpdated,
-    );
-  }
+  /// True if currently loading
+  bool get isLoading => this is CloudLoading;
+}
+
+/// State during check/download operations.
+class CloudLoading extends CloudState {
+  const CloudLoading({super.currentLocale, super.lastUpdated});
+}
+
+/// State when not loading - has cached locale data or null.
+class CloudReady extends CloudState {
+  const CloudReady({super.currentLocale, super.lastUpdated});
 }

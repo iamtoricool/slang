@@ -11,7 +11,8 @@ dependencies:
     sdk: flutter
   slang: ">=3.0.0 <5.0.0"
   slang_flutter: ">=3.0.0 <5.0.0"
-  slang_cloud: any
+  slang_cloud:
+    path: ..
   http: ^1.2.0
 
 dev_dependencies:
