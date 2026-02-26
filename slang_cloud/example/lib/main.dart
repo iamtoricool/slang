@@ -48,7 +48,7 @@ final languageListProvider = FutureProvider<List<LanguageModel>>((ref) async {
   } else {
     throw Exception('Failed to load languages: ${response.statusCode}');
   }
-});
+}, retry: (retryCount, error) => null);
 
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
@@ -100,15 +100,12 @@ class _LanguageListViewState extends ConsumerState<LanguageListView> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.refresh(languageListProvider),
+            onPressed: () => controller.checkForUpdates(),
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(languageListProvider);
-          await ref.read(languageListProvider.future);
-        },
+        onRefresh: () => ref.refresh(languageListProvider.future),
         child: languageList.when(
           data: (languages) {
             return ValueListenableBuilder<CloudState>(

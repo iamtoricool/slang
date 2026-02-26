@@ -24,6 +24,10 @@ dev_dependencies:
   slang_cli:
     path: ../../slang_cli
 
+flutter:
+  uses-material-design: true
+  generate: false
+
 slang:
   translation_overrides: true
   namespaces: true
