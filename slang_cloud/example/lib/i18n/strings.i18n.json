@@ -3,5 +3,11 @@
     "title": "Slang Cloud Demo (Local)",
     "description": "This text is from the local bundle.",
     "button": "Check for Updates"
+  },
+  "languageList": {
+    "title": "Select Language",
+    "errors": {
+      "empty": "No language found!\n Try again later"
+    }
   }
 }

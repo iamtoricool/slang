@@ -1,0 +1,299 @@
+{
+  "info": {
+    "_postman_id": "slang-cloud-api-v1",
+    "name": "Slang Cloud API",
+    "description": "API collection for Slang Cloud Server - Translation management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": [""]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Translations (Client Endpoints)",
+      "item": [
+        {
+          "name": "Check Version (HEAD)",
+          "request": {
+            "method": "HEAD",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/translations/{{locale}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["translations", "{{locale}}"]
+            },
+            "description": "Check if translation update is needed. Returns X-Translation-Hash header."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Translations (GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/translations/{{locale}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["translations", "{{locale}}"]
+            },
+            "description": "Download full translations JSON. Returns X-Translation-Hash header."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Language Management",
+      "item": [
+        {
+          "name": "List All Languages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/languages",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages"]
+            },
+            "description": "Get list of all languages with metadata (no translations)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Language",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/languages/{{code}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages", "{{code}}"]
+            },
+            "description": "Get single language with full translations"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Language",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"es\",\n  \"name\": \"Spanish\",\n  \"nativeName\": \"Español\",\n  \"translations\": {\n    \"main\": {\n      \"title\": \"Título\",\n      \"description\": \"Descripción\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/languages",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages"]
+            },
+            "description": "Create a new language with translations"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Language (Full)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Spanish\",\n  \"nativeName\": \"Español\",\n  \"translations\": {\n    \"main\": {\n      \"title\": \"Título Actualizado\",\n      \"description\": \"Nueva Descripción\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/languages/{{code}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages", "{{code}}"]
+            },
+            "description": "Full replace language (metadata + translations)"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Language (Partial)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"nativeName\": \"Updated Native\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/languages/{{code}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages", "{{code}}"]
+            },
+            "description": "Update only metadata (name, nativeName). Translations unchanged."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Language",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/languages/{{code}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages", "{{code}}"]
+            },
+            "description": "Delete a language and all its translations"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Translation Management",
+      "item": [
+        {
+          "name": "Get Translations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/languages/{{code}}/translations",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages", "{{code}}", "translations"]
+            },
+            "description": "Get translations with hash info"
+          },
+          "response": []
+        },
+        {
+          "name": "Replace Translations (Full)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"translations\": {\n    \"main\": {\n      \"title\": \"New Title\",\n      \"description\": \"New Description\"\n    },\n    \"common\": {\n      \"save\": \"Save\",\n      \"cancel\": \"Cancel\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/languages/{{code}}/translations",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages", "{{code}}", "translations"]
+            },
+            "description": "Full replace all translations"
+          },
+          "response": []
+        },
+        {
+          "name": "Merge Translations (Patch)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"translations\": {\n    \"main\": {\n      \"title\": \"Updated Title\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/languages/{{code}}/translations",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages", "{{code}}", "translations"]
+            },
+            "description": "Merge with existing translations (deep merge)"
+          },
+          "response": []
+        },
+        {
+          "name": "Add/Update Keys",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"main\": {\n    \"button\": \"Click Me\"\n  },\n  \"common\": {\n    \"submit\": \"Submit\"\n  }\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/languages/{{code}}/translations",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["languages", "{{code}}", "translations"]
+            },
+            "description": "Add or update specific translation keys (nested object supported)"
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "locale",
+      "value": "en",
+      "type": "string"
+    },
+    {
+      "key": "code",
+      "value": "en",
+      "type": "string"
+    }
+  ]
+}

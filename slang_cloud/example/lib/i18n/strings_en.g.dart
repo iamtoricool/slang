@@ -41,6 +41,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 
 	// Translations
 	late final TranslationsMainEn main = TranslationsMainEn.internal(_root);
+	late final TranslationsLanguageListEn languageList = TranslationsLanguageListEn.internal(_root);
 }
 
 // Path: main
@@ -61,6 +62,32 @@ class TranslationsMainEn {
 	String get button => TranslationOverrides.string(_root.$meta, 'main.button', {}) ?? 'Check for Updates';
 }
 
+// Path: languageList
+class TranslationsLanguageListEn {
+	TranslationsLanguageListEn.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Select Language'
+	String get title => TranslationOverrides.string(_root.$meta, 'languageList.title', {}) ?? 'Select Language';
+
+	late final TranslationsLanguageListErrorsEn errors = TranslationsLanguageListErrorsEn.internal(_root);
+}
+
+// Path: languageList.errors
+class TranslationsLanguageListErrorsEn {
+	TranslationsLanguageListErrorsEn.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'No language found! Try again later'
+	String get empty => TranslationOverrides.string(_root.$meta, 'languageList.errors.empty', {}) ?? 'No language found!\n Try again later';
+}
+
 /// The flat map containing all translations for locale <en>.
 /// Only for edge cases! For simple maps, use the map function of this library.
 ///
@@ -72,6 +99,8 @@ extension on Translations {
 			'main.title' => TranslationOverrides.string(_root.$meta, 'main.title', {}) ?? 'Slang Cloud Demo (Local)',
 			'main.description' => TranslationOverrides.string(_root.$meta, 'main.description', {}) ?? 'This text is from the local bundle.',
 			'main.button' => TranslationOverrides.string(_root.$meta, 'main.button', {}) ?? 'Check for Updates',
+			'languageList.title' => TranslationOverrides.string(_root.$meta, 'languageList.title', {}) ?? 'Select Language',
+			'languageList.errors.empty' => TranslationOverrides.string(_root.$meta, 'languageList.errors.empty', {}) ?? 'No language found!\n Try again later',
 			_ => null,
 		};
 	}
