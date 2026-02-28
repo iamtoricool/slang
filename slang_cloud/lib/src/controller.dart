@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:slang_cloud/src/client.dart';
 import 'package:slang_cloud/src/config.dart';
+import 'package:slang_cloud/src/exception.dart';
 import 'package:slang_cloud/src/model.dart';
 import 'package:slang_cloud/src/storage.dart';
 import 'package:crypto/crypto.dart';
@@ -36,12 +38,14 @@ class CloudTranslationController extends ValueNotifier<CloudState> {
   /// Creates a new controller instance.
   ///
   /// [storage] is optional - defaults to in-memory storage.
+  /// [client] is optional - for testing purposes only.
   CloudTranslationController({
     required this.config,
     SlangCloudStorage? storage,
+    http.Client? client,
   })  : _storage = storage ?? InMemorySlangCloudStorage(),
         super(const CloudReady()) {
-    _client = SlangCloudClient(config: config, storage: _storage);
+    _client = SlangCloudClient(config: config, storage: _storage, client: client);
   }
 
   /// Gets cached translation JSON for the given locale.
@@ -81,17 +85,15 @@ class CloudTranslationController extends ValueNotifier<CloudState> {
         // Download new translation
         final jsonContent = await _client.downloadTranslation(locale);
 
-        if (jsonContent == null) {
-          throw Exception('Failed to download translation for $locale');
-        }
-
         // Verify hash
         final downloadedHash = md5.convert(utf8.encode(jsonContent)).toString();
         if (downloadedHash != newHash) {
-          debugPrint(
-            'SlangCloud: Hash mismatch for $locale. Expected $newHash, got $downloadedHash',
+          throw SlangCloudHashMismatchException(
+            'Hash verification failed: downloaded content may be corrupted',
+            expectedHash: newHash,
+            actualHash: downloadedHash,
+            locale: locale,
           );
-          throw Exception('Hash verification failed: downloaded content may be corrupted');
         }
 
         // Cache the translation
