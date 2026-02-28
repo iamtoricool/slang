@@ -1,169 +1,17 @@
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { createHash } from "node:crypto";
-
-/**
- * Slang Cloud Server - Hono Implementation
- *
- * Features:
- * - HEAD/GET /translations/:locale - For slang_cloud client
- * - Full CRUD for languages
- * - Translation management (full replace, patch, nested updates)
- * - In-memory storage with auto hash calculation
- * - CORS enabled for Flutter web testing
- * - Vue.js 3 Admin Panel at /admin
- */
-
-// Types
-interface Language {
-  code: string;
-  name: string;
-  nativeName?: string;
-  translations: Record<string, any>;
-  hash: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface CreateLanguageRequest {
-  code: string;
-  name: string;
-  nativeName?: string;
-  translations?: Record<string, any>;
-}
-
-interface UpdateTranslationsRequest {
-  translations: Record<string, any>;
-}
-
-// In-memory database
-const database = new Map<string, Language>();
-
-// Helper functions
-function calculateHash(translations: Record<string, any>): string {
-  return createHash("md5").update(JSON.stringify(translations)).digest("hex");
-}
-
-function validateTranslations(data: any): Record<string, any> {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    throw new Error("Translations must be a valid JSON object");
-  }
-  return data;
-}
-
-function deepMerge(target: any, source: any): any {
-  if (typeof target !== "object" || target === null) return source;
-  if (typeof source !== "object" || source === null) return target;
-
-  const result = { ...target };
-  for (const key in source) {
-    if (source.hasOwnProperty(key)) {
-      if (
-        typeof source[key] === "object" &&
-        source[key] !== null &&
-        !Array.isArray(source[key])
-      ) {
-        result[key] = deepMerge(result[key], source[key]);
-      } else {
-        result[key] = source[key];
-      }
-    }
-  }
-  return result;
-}
-
-function createLanguage(data: CreateLanguageRequest): Language {
-  const translations = data.translations || {};
-  const now = new Date();
-  return {
-    code: data.code,
-    name: data.name,
-    nativeName: data.nativeName,
-    translations: validateTranslations(translations),
-    hash: calculateHash(translations),
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-// Seed data
-function seedDatabase() {
-  const seedLanguages: CreateLanguageRequest[] = [
-    {
-      code: "en",
-      name: "English",
-      nativeName: "English",
-      translations: {
-        main: {
-          title: "Slang Cloud Demo (Server)",
-          description: "This text is served from the Hono backend!",
-          button: "Check for Updates",
-        },
-      },
-    },
-    {
-      code: "de",
-      name: "German",
-      nativeName: "Deutsch",
-      translations: {
-        main: {
-          title: "Slang Cloud Demo (Server DE)",
-          description: "Dieser Text kommt vom Hono Backend!",
-          button: "Nach Updates suchen",
-        },
-        common: {
-          version: "tor nani",
-        },
-      },
-    },
-  ];
-
-  seedLanguages.forEach((lang) => {
-    database.set(lang.code, createLanguage(lang));
-  });
-
-  console.log(`✅ Seeded ${seedLanguages.length} languages`);
-}
-
-// Initialize app
-const app = new Hono();
-
-// Middleware
-app.use(
-  "*",
-  cors({
-    origin: "*",
-    allowMethods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "X-Translation-Hash"],
-  })
-);
-
-// Admin Panel HTML
-const adminHtml = `<!DOCTYPE html>
+@verbatim
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Slang Cloud Admin</title>
+  <title>Slang Cloud Admin - Laravel</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    [v-cloak] { display: none; }
+    [v-cloak] { display: none !important; }
     .fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
     .fade-enter-from, .fade-leave-to { opacity: 0; }
-    .slide-enter-active, .slide-leave-active { transition: transform 0.3s; }
-    .slide-enter-from { transform: translateX(100%); }
-    .slide-leave-to { transform: translateX(100%); }
-    .btn-primary {
-      @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
-    }
-    .btn-secondary {
-      @apply px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors;
-    }
-    .btn-danger {
-      @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors;
-    }
   </style>
 </head>
 <body class="bg-gray-100">
@@ -176,11 +24,11 @@ const adminHtml = `<!DOCTYPE html>
             <i class="fas fa-globe"></i>
             Slang Cloud
           </h1>
-          <p class="text-blue-100 text-sm mt-1">Translation Admin</p>
+          <p class="text-blue-100 text-sm mt-1">Translation Admin (Laravel)</p>
         </div>
         
         <div class="p-4 border-b">
-          <button @click="showAddModal = true" class="btn-primary w-full flex items-center justify-center gap-2">
+          <button @click="showAddModal = true" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
             <i class="fas fa-plus"></i>
             Add Language
           </button>
@@ -262,22 +110,22 @@ const adminHtml = `<!DOCTYPE html>
               </div>
             </div>
             <div class="flex gap-2">
-              <button @click="showCloneModal = true" class="btn-secondary flex items-center gap-2">
+              <button @click="showCloneModal = true" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2">
                 <i class="fas fa-copy"></i>
                 Clone
               </button>
-              <button @click="exportLanguage" class="btn-secondary flex items-center gap-2">
+              <button @click="exportLanguage" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2">
                 <i class="fas fa-download"></i>
                 Export
               </button>
-              <button @click="showImportModal = true" class="btn-secondary flex items-center gap-2">
+              <button @click="showImportModal = true" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2">
                 <i class="fas fa-upload"></i>
                 Import
               </button>
               <button 
                 @click="saveLanguage" 
                 :disabled="!hasChanges || saving"
-                class="btn-primary flex items-center gap-2"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
                 <i v-if="saving" class="fas fa-spinner fa-spin"></i>
                 <i v-else class="fas fa-save"></i>
@@ -327,7 +175,7 @@ const adminHtml = `<!DOCTYPE html>
                 <i class="fas fa-language text-blue-600"></i>
                 Translations
               </h3>
-              <button @click="addTranslationKey" class="btn-primary text-sm flex items-center gap-2">
+              <button @click="addTranslationKey" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm flex items-center gap-2">
                 <i class="fas fa-plus"></i>
                 Add Key
               </button>
@@ -372,7 +220,7 @@ const adminHtml = `<!DOCTYPE html>
             <div v-if="Object.keys(flatTranslations).length === 0" class="text-center py-12 text-gray-500">
               <i class="fas fa-key text-4xl mb-3 text-gray-300"></i>
               <p>No translation keys yet</p>
-              <button @click="addTranslationKey" class="btn-primary mt-4">
+              <button @click="addTranslationKey" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 mx-auto">
                 <i class="fas fa-plus mr-2"></i>
                 Add First Key
               </button>
@@ -386,7 +234,7 @@ const adminHtml = `<!DOCTYPE html>
               Danger Zone
             </h3>
             <p class="text-red-600 mb-4">Once deleted, this language cannot be recovered.</p>
-            <button @click="confirmDelete" class="btn-danger flex items-center gap-2">
+            <button @click="confirmDelete" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2">
               <i class="fas fa-trash-alt"></i>
               Delete Language
             </button>
@@ -438,11 +286,11 @@ const adminHtml = `<!DOCTYPE html>
           </div>
         </div>
         <div class="p-6 border-t flex justify-end gap-3">
-          <button @click="showAddModal = false" class="btn-secondary">Cancel</button>
+          <button @click="showAddModal = false" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
           <button 
             @click="createLanguage" 
             :disabled="!canCreate || creating"
-            class="btn-primary"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <i v-if="creating" class="fas fa-spinner fa-spin mr-2"></i>
             {{ creating ? 'Creating...' : 'Create Language' }}
@@ -470,11 +318,11 @@ const adminHtml = `<!DOCTYPE html>
           </div>
         </div>
         <div class="p-6 border-t flex justify-end gap-3">
-          <button @click="showCloneModal = false" class="btn-secondary">Cancel</button>
+          <button @click="showCloneModal = false" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
           <button 
             @click="cloneLanguage" 
             :disabled="!cloneCode || cloning"
-            class="btn-primary"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <i v-if="cloning" class="fas fa-spinner fa-spin mr-2"></i>
             {{ cloning ? 'Cloning...' : 'Clone Language' }}
@@ -508,17 +356,17 @@ const adminHtml = `<!DOCTYPE html>
             <textarea
               v-model="importJson"
               rows="10"
-              placeholder='Paste JSON here... e.g., {&quot;main&quot;: {&quot;title&quot;: &quot;Hello&quot;}}'
+              placeholder='Paste JSON here... e.g., {"main": {"title": "Hello"}}'
               class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-sm"
             ></textarea>
           </div>
         </div>
         <div class="p-6 border-t flex justify-end gap-3">
-          <button @click="showImportModal = false" class="btn-secondary">Cancel</button>
+          <button @click="showImportModal = false" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
           <button 
             @click="importTranslations" 
             :disabled="!importJson || importing"
-            class="btn-primary"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <i v-if="importing" class="fas fa-spinner fa-spin mr-2"></i>
             {{ importing ? 'Importing...' : 'Import' }}
@@ -575,7 +423,7 @@ const adminHtml = `<!DOCTYPE html>
         const showImportModal = ref(false);
         
         // Forms
-        const form = reactive({});
+        const form = reactive({ code: '', name: '', nativeName: '' });
         const flatTranslations = reactive({});
         const newLanguage = reactive({ code: '', name: '', nativeName: '' });
         const cloneCode = ref('');
@@ -585,6 +433,8 @@ const adminHtml = `<!DOCTYPE html>
         // Toast
         const toasts = ref([]);
         let toastId = 0;
+
+        const API_BASE = '/api';
 
         // Computed
         const filteredLanguages = computed(() => {
@@ -619,7 +469,7 @@ const adminHtml = `<!DOCTYPE html>
 
         const fetchLanguages = async () => {
           try {
-            const response = await fetch('/languages');
+            const response = await fetch(`${API_BASE}/languages`);
             languages.value = await response.json();
           } catch (error) {
             showToast('Failed to load languages', 'error');
@@ -628,7 +478,7 @@ const adminHtml = `<!DOCTYPE html>
 
         const selectLanguage = async (lang) => {
           try {
-            const response = await fetch(\`/languages/\${lang.code}\`);
+            const response = await fetch(`${API_BASE}/languages/${lang.code}`);
             const fullLang = await response.json();
             selectedLanguage.value = fullLang;
             Object.assign(form, {
@@ -648,7 +498,7 @@ const adminHtml = `<!DOCTYPE html>
         const createLanguage = async () => {
           creating.value = true;
           try {
-            const response = await fetch('/languages', {
+            const response = await fetch(`${API_BASE}/languages`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -680,7 +530,7 @@ const adminHtml = `<!DOCTYPE html>
           saving.value = true;
           try {
             // Save metadata
-            await fetch(\`/languages/\${form.code}\`, {
+            await fetch(`${API_BASE}/languages/${form.code}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -691,7 +541,7 @@ const adminHtml = `<!DOCTYPE html>
 
             // Save translations
             const translations = unflattenTranslations(flatTranslations);
-            await fetch(\`/languages/\${form.code}/translations\`, {
+            await fetch(`${API_BASE}/languages/${form.code}/translations`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ translations })
@@ -711,12 +561,12 @@ const adminHtml = `<!DOCTYPE html>
         const cloneLanguage = async () => {
           cloning.value = true;
           try {
-            const response = await fetch('/languages', {
+            const response = await fetch(`${API_BASE}/languages`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 code: cloneCode.value.toLowerCase(),
-                name: \`\${form.name} (Copy)\`,
+                name: `${form.name} (Copy)`,
                 nativeName: form.nativeName,
                 translations: unflattenTranslations(flatTranslations)
               })
@@ -738,10 +588,10 @@ const adminHtml = `<!DOCTYPE html>
         };
 
         const confirmDelete = async () => {
-          if (!confirm(\`Are you sure you want to delete "\${form.name}"? This action cannot be undone.\`)) return;
+          if (!confirm(`Are you sure you want to delete "${form.name}"? This action cannot be undone.`)) return;
           
           try {
-            const response = await fetch(\`/languages/\${form.code}\`, { method: 'DELETE' });
+            const response = await fetch(`${API_BASE}/languages/${form.code}`, { method: 'DELETE' });
             if (response.ok) {
               showToast('Language deleted successfully', 'success');
               selectedLanguage.value = null;
@@ -765,7 +615,7 @@ const adminHtml = `<!DOCTYPE html>
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = \`\${form.code}-translations.json\`;
+          a.download = `${form.code}-translations.json`;
           a.click();
           URL.revokeObjectURL(url);
           showToast('Language exported successfully', 'success');
@@ -790,7 +640,7 @@ const adminHtml = `<!DOCTYPE html>
             hasChanges.value = true;
             showImportModal.value = false;
             importJson.value = '';
-            showToast(\`Translations \${importMode.value === 'merge' ? 'merged' : 'replaced'} successfully\`, 'success');
+            showToast(`Translations ${importMode.value === 'merge' ? 'merged' : 'replaced'} successfully`, 'success');
           } catch (error) {
             showToast('Invalid JSON format', 'error');
           } finally {
@@ -807,7 +657,7 @@ const adminHtml = `<!DOCTYPE html>
         };
 
         const removeKey = (key) => {
-          if (confirm(\`Delete key "\${key}"?\`)) {
+          if (confirm(`Delete key "${key}"?`)) {
             delete flatTranslations[key];
             hasChanges.value = true;
           }
@@ -821,7 +671,7 @@ const adminHtml = `<!DOCTYPE html>
         const flattenTranslations = (obj, prefix = '') => {
           const result = {};
           for (const key in obj) {
-            const newKey = prefix ? \`\${prefix}.\${key}\` : key;
+            const newKey = prefix ? `${prefix}.${key}` : key;
             if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
               Object.assign(result, flattenTranslations(obj[key], newKey));
             } else {
@@ -883,9 +733,9 @@ const adminHtml = `<!DOCTYPE html>
           const diff = (now - date) / 1000;
           
           if (diff < 60) return 'just now';
-          if (diff < 3600) return \`\${Math.floor(diff / 60)}m ago\`;
-          if (diff < 86400) return \`\${Math.floor(diff / 3600)}h ago\`;
-          if (diff < 604800) return \`\${Math.floor(diff / 86400)}d ago\`;
+          if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+          if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+          if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
           return date.toLocaleDateString();
         };
 
@@ -934,387 +784,5 @@ const adminHtml = `<!DOCTYPE html>
     }).mount('#app');
   </script>
 </body>
-</html>`;
-
-// Health check
-app.get("/", (c) => {
-  return c.json({
-    status: "ok",
-    service: "slang-cloud-server",
-    version: "1.0.0",
-    languages: database.size,
-    admin: "/admin",
-  });
-});
-
-// Admin Panel
-app.get("/admin", (c) => {
-  return c.html(adminHtml);
-});
-
-// ============================================
-// TRANSLATION ENDPOINTS (for slang_cloud)
-// ============================================
-
-// HEAD /translations/:locale - Check version
-app.on("HEAD", "/translations/:locale", (c) => {
-  const locale = c.req.param("locale");
-  const language = database.get(locale);
-
-  if (!language) {
-    return c.json({ error: "Language not found" }, 404);
-  }
-
-  c.header("X-Translation-Hash", language.hash);
-  c.header("Content-Type", "application/json");
-  return c.body(null, 200);
-});
-
-// GET /translations/:locale - Download translations as file
-app.get("/translations/:locale", (c) => {
-  const locale = c.req.param("locale");
-  const language = database.get(locale);
-
-  if (!language) {
-    return c.json({ error: "Language not found" }, 404);
-  }
-
-  const jsonContent = JSON.stringify(language.translations, null, 2);
-
-  c.header("X-Translation-Hash", language.hash);
-  c.header("Content-Type", "application/json");
-  c.header("Content-Disposition", `attachment; filename="${locale}.json"`);
-  return c.body(jsonContent);
-});
-
-// ============================================
-// LANGUAGE MANAGEMENT ENDPOINTS
-// ============================================
-
-// GET /languages - List all languages (metadata only)
-app.get("/languages", (c) => {
-  const languages = Array.from(database.values()).map((lang) => ({
-    code: lang.code,
-    name: lang.name,
-    nativeName: lang.nativeName,
-    hash: lang.hash,
-    updatedAt: lang.updatedAt.toISOString(),
-  }));
-
-  return c.json(languages);
-});
-
-// GET /languages/:code - Get single language with translations
-app.get("/languages/:code", (c) => {
-  const code = c.req.param("code");
-  const language = database.get(code);
-
-  if (!language) {
-    return c.json({ error: "Language not found" }, 404);
-  }
-
-  return c.json({
-    code: language.code,
-    name: language.name,
-    nativeName: language.nativeName,
-    translations: language.translations,
-    hash: language.hash,
-    createdAt: language.createdAt.toISOString(),
-    updatedAt: language.updatedAt.toISOString(),
-  });
-});
-
-// POST /languages - Create new language
-app.post("/languages", async (c) => {
-  try {
-    const body = await c.req.json<CreateLanguageRequest>();
-
-    // Validation
-    if (!body.code || typeof body.code !== "string" || body.code.length !== 2) {
-      return c.json(
-        { error: "Invalid code. Must be 2 character language code" },
-        400
-      );
-    }
-
-    if (!body.name || typeof body.name !== "string") {
-      return c.json({ error: "Name is required" }, 400);
-    }
-
-    const code = body.code.toLowerCase();
-
-    if (database.has(code)) {
-      return c.json({ error: "Language already exists" }, 409);
-    }
-
-    const language = createLanguage({
-      ...body,
-      code,
-    });
-
-    database.set(code, language);
-
-    return c.json(
-      {
-        code: language.code,
-        name: language.name,
-        nativeName: language.nativeName,
-        hash: language.hash,
-        createdAt: language.createdAt.toISOString(),
-        updatedAt: language.updatedAt.toISOString(),
-      },
-      201
-    );
-  } catch (error: any) {
-    return c.json({ error: error.message || "Invalid request" }, 400);
-  }
-});
-
-// PUT /languages/:code - Full replace language
-app.put("/languages/:code", async (c) => {
-  try {
-    const code = c.req.param("code").toLowerCase();
-    const existing = database.get(code);
-
-    if (!existing) {
-      return c.json({ error: "Language not found" }, 404);
-    }
-
-    const body = await c.req.json<CreateLanguageRequest>();
-
-    if (body.name && typeof body.name !== "string") {
-      return c.json({ error: "Invalid name" }, 400);
-    }
-
-    const translations = body.translations
-      ? validateTranslations(body.translations)
-      : existing.translations;
-
-    const updated: Language = {
-      ...existing,
-      name: body.name || existing.name,
-      nativeName: body.nativeName !== undefined
-        ? body.nativeName
-        : existing.nativeName,
-      translations,
-      hash: calculateHash(translations),
-      updatedAt: new Date(),
-    };
-
-    database.set(code, updated);
-
-    return c.json({
-      code: updated.code,
-      name: updated.name,
-      nativeName: updated.nativeName,
-      hash: updated.hash,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-    });
-  } catch (error: any) {
-    return c.json({ error: error.message || "Invalid request" }, 400);
-  }
-});
-
-// PATCH /languages/:code - Partial update metadata only
-app.patch("/languages/:code", async (c) => {
-  try {
-    const code = c.req.param("code").toLowerCase();
-    const existing = database.get(code);
-
-    if (!existing) {
-      return c.json({ error: "Language not found" }, 404);
-    }
-
-    const body = await c.req.json<Partial<CreateLanguageRequest>>();
-
-    if (body.name !== undefined && typeof body.name !== "string") {
-      return c.json({ error: "Invalid name" }, 400);
-    }
-
-    const updated: Language = {
-      ...existing,
-      name: body.name !== undefined ? body.name : existing.name,
-      nativeName: body.nativeName !== undefined
-        ? body.nativeName
-        : existing.nativeName,
-      updatedAt: new Date(),
-    };
-
-    database.set(code, updated);
-
-    return c.json({
-      code: updated.code,
-      name: updated.name,
-      nativeName: updated.nativeName,
-      hash: updated.hash,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-    });
-  } catch (error: any) {
-    return c.json({ error: error.message || "Invalid request" }, 400);
-  }
-});
-
-// DELETE /languages/:code - Delete language
-app.delete("/languages/:code", (c) => {
-  const code = c.req.param("code").toLowerCase();
-
-  if (!database.has(code)) {
-    return c.json({ error: "Language not found" }, 404);
-  }
-
-  database.delete(code);
-  return c.json({ message: "Language deleted successfully" });
-});
-
-// ============================================
-// TRANSLATION MANAGEMENT ENDPOINTS
-// ============================================
-
-// GET /languages/:code/translations - Get translations only
-app.get("/languages/:code/translations", (c) => {
-  const code = c.req.param("code").toLowerCase();
-  const language = database.get(code);
-
-  if (!language) {
-    return c.json({ error: "Language not found" }, 404);
-  }
-
-  return c.json({
-    translations: language.translations,
-    hash: language.hash,
-    updatedAt: language.updatedAt.toISOString(),
-  });
-});
-
-// PUT /languages/:code/translations - Full replace translations
-app.put("/languages/:code/translations", async (c) => {
-  try {
-    const code = c.req.param("code").toLowerCase();
-    const existing = database.get(code);
-
-    if (!existing) {
-      return c.json({ error: "Language not found" }, 404);
-    }
-
-    const body = await c.req.json<UpdateTranslationsRequest>();
-
-    if (!body.translations) {
-      return c.json({ error: "translations field is required" }, 400);
-    }
-
-    const translations = validateTranslations(body.translations);
-
-    const updated: Language = {
-      ...existing,
-      translations,
-      hash: calculateHash(translations),
-      updatedAt: new Date(),
-    };
-
-    database.set(code, updated);
-
-    return c.json({
-      code: updated.code,
-      hash: updated.hash,
-      updatedAt: updated.updatedAt.toISOString(),
-      translations: updated.translations,
-    });
-  } catch (error: any) {
-    return c.json({ error: error.message || "Invalid request" }, 400);
-  }
-});
-
-// PATCH /languages/:code/translations - Merge/patch translations
-app.patch("/languages/:code/translations", async (c) => {
-  try {
-    const code = c.req.param("code").toLowerCase();
-    const existing = database.get(code);
-
-    if (!existing) {
-      return c.json({ error: "Language not found" }, 404);
-    }
-
-    const body = await c.req.json<UpdateTranslationsRequest>();
-
-    if (!body.translations) {
-      return c.json({ error: "translations field is required" }, 400);
-    }
-
-    const patch = validateTranslations(body.translations);
-    const merged = deepMerge(existing.translations, patch);
-
-    const updated: Language = {
-      ...existing,
-      translations: merged,
-      hash: calculateHash(merged),
-      updatedAt: new Date(),
-    };
-
-    database.set(code, updated);
-
-    return c.json({
-      code: updated.code,
-      hash: updated.hash,
-      updatedAt: updated.updatedAt.toISOString(),
-      translations: updated.translations,
-    });
-  } catch (error: any) {
-    return c.json({ error: error.message || "Invalid request" }, 400);
-  }
-});
-
-// POST /languages/:code/translations - Add/update specific keys
-app.post("/languages/:code/translations", async (c) => {
-  try {
-    const code = c.req.param("code").toLowerCase();
-    const existing = database.get(code);
-
-    if (!existing) {
-      return c.json({ error: "Language not found" }, 404);
-    }
-
-    const body = await c.req.json<Record<string, any>>();
-
-    // Validate that body is an object
-    if (typeof body !== "object" || body === null || Array.isArray(body)) {
-      return c.json({ error: "Request body must be a JSON object" }, 400);
-    }
-
-    // Merge with existing
-    const merged = deepMerge(existing.translations, body);
-
-    const updated: Language = {
-      ...existing,
-      translations: merged,
-      hash: calculateHash(merged),
-      updatedAt: new Date(),
-    };
-
-    database.set(code, updated);
-
-    return c.json({
-      code: updated.code,
-      hash: updated.hash,
-      updatedAt: updated.updatedAt.toISOString(),
-      translations: updated.translations,
-    });
-  } catch (error: any) {
-    return c.json({ error: error.message || "Invalid request" }, 400);
-  }
-});
-
-// Start server
-seedDatabase();
-
-const port = process.env.PORT || 3000;
-console.log(`🚀 Slang Cloud Server running on http://localhost:${port}`);
-console.log(`📖 API Documentation: http://localhost:${port}/`);
-console.log(`🎛️  Admin Panel: http://localhost:${port}/admin`);
-console.log(`⚡ Auto-reload enabled (bun --watch)`);
-
-export default {
-  port,
-  fetch: app.fetch,
-};
+</html>
+@endverbatim

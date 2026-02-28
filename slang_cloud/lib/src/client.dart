@@ -64,7 +64,7 @@ class SlangCloudClient {
   /// - JSON response (Content-Type: application/json)
   /// - File download (any other Content-Type)
   Future<String?> downloadTranslation(String locale) async {
-    final url = Uri.parse(config.buildUrl(locale));
+    final url = Uri.parse(config.buildDownloadUrl(locale));
 
     try {
       final request = http.Request('GET', url)..headers.addAll(config.headers);

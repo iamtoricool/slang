@@ -1,0 +1,7 @@
+{
+    "main": {
+        "title": "Slang Cloud Demo (Server)",
+        "description": "This text is served from the Laravel backend!",
+        "button": "Check for Updates"
+    }
+}

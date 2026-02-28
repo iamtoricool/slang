@@ -4,10 +4,16 @@ class SlangCloudConfig {
   /// Example: 'https://api.yourapp.com'
   final String baseUrl;
 
-  /// The path to the translations endpoint.
+  /// The path to the translations endpoint for checking updates (HEAD request).
   /// The '{locale}' placeholder will be replaced with the target locale.
   /// Default: '/translations/{locale}'
   final String endpoint;
+
+  /// The path to the translations endpoint for downloading translations (GET request).
+  /// If not specified, defaults to [endpoint].
+  /// The '{locale}' placeholder will be replaced with the target locale.
+  /// Example: '/translations/{locale}/download'
+  final String downloadEndpoint;
 
   /// The header key for the translation hash/version.
   /// Default: 'X-Translation-Hash'
@@ -28,15 +34,22 @@ class SlangCloudConfig {
   const SlangCloudConfig({
     required this.baseUrl,
     this.endpoint = '/translations/{locale}',
+    String? downloadEndpoint,
     this.hashHeader = 'X-Translation-Hash',
     this.headers = const {},
     this.timeout = const Duration(seconds: 30),
     this.isFlatMap = false,
-  });
+  }) : downloadEndpoint = downloadEndpoint ?? endpoint;
 
-  /// Builds the full URL for a given locale.
+  /// Builds the full URL for checking updates (HEAD request).
   String buildUrl(String locale) {
     final path = endpoint.replaceAll('{locale}', locale);
+    return '$baseUrl$path';
+  }
+
+  /// Builds the full URL for downloading translations (GET request).
+  String buildDownloadUrl(String locale) {
+    final path = downloadEndpoint.replaceAll('{locale}', locale);
     return '$baseUrl$path';
   }
 }

@@ -20,7 +20,8 @@ Future<void> main() async {
   final cloudTranslationController = CloudTranslationController(
     config: SlangCloudConfig(
       baseUrl: 'http://10.0.2.2:3000',
-      endpoint: '/translations/{locale}',
+      endpoint: '/api/translations/{locale}/check',
+      downloadEndpoint: '/api/translations/{locale}/download',
       isFlatMap: false,
     ),
     storage: storage,
@@ -31,7 +32,8 @@ Future<void> main() async {
   if (lastLocale != null) {
     // Try to restore last locale, fallback to device locale on error
     unawaited(
-      cloudTranslationController.setLanguage(lastLocale).catchError((_) {
+      cloudTranslationController.setLanguage(lastLocale).catchError((_) async {
+        await storage.setActiveLocale(null);
         return cloudTranslationController.setLanguage(
           LocaleSettings.currentLocale.languageCode,
         );
@@ -64,7 +66,7 @@ Future<void> main() async {
 }
 
 final languageListProvider = FutureProvider<List<LanguageModel>>((ref) async {
-  final response = await http.get(Uri.parse('http://10.0.2.2:3000/languages'));
+  final response = await http.get(Uri.parse('http://10.0.2.2:3000/api/languages'));
 
   if (response.statusCode == 200) {
     final List<dynamic> data = jsonDecode(response.body);

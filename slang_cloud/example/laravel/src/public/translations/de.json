@@ -1,0 +1,10 @@
+{
+    "main": {
+        "title": "Slang Cloud Demo (Server DE)",
+        "description": "Dieser Text kommt vom Laravel Backend!",
+        "button": "Nach Updates suchen"
+    },
+    "common": {
+        "version": "tor nani"
+    }
+}
