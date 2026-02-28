@@ -80,6 +80,7 @@ class CloudTranslationProvider extends StatefulWidget {
 
 class _CloudTranslationProviderState extends State<CloudTranslationProvider> {
   String? _lastAppliedLocale;
+  String? _lastAppliedHash;
 
   @override
   void initState() {
@@ -96,10 +97,16 @@ class _CloudTranslationProviderState extends State<CloudTranslationProvider> {
   void _onControllerChanged() async {
     final state = widget.controller.value;
 
-    // Only apply when transitioning to Ready with a new locale
-    if (state is CloudReady && state.currentLocale != null && state.currentLocale != _lastAppliedLocale) {
-      await _applyTranslations(state.currentLocale!);
-      _lastAppliedLocale = state.currentLocale;
+    // Apply when transitioning to Ready with a new locale OR new hash
+    if (state is CloudReady && state.currentLocale != null) {
+      final localeChanged = state.currentLocale != _lastAppliedLocale;
+      final hashChanged = state.currentHash != _lastAppliedHash;
+
+      if (localeChanged || hashChanged) {
+        await _applyTranslations(state.currentLocale!);
+        _lastAppliedLocale = state.currentLocale;
+        _lastAppliedHash = state.currentHash;
+      }
     }
   }
 

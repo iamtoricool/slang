@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -7,10 +8,14 @@ import 'package:slang_cloud/slang_cloud.dart';
 
 import 'i18n/strings.g.dart';
 import 'models/language_model.dart';
+import 'storage/shared_prefs_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LocaleSettings.useDeviceLocale();
+
+  // Create storage with SharedPreferences
+  final storage = SharedPreferencesSlangCloudStorage();
 
   final cloudTranslationController = CloudTranslationController(
     config: SlangCloudConfig(
@@ -18,7 +23,26 @@ Future<void> main() async {
       endpoint: '/translations/{locale}',
       isFlatMap: false,
     ),
+    storage: storage,
   );
+
+  // Restore last active language or download device locale
+  final lastLocale = await storage.getActiveLocale();
+  if (lastLocale != null) {
+    // Try to restore last locale, fallback to device locale on error
+    unawaited(
+      cloudTranslationController.setLanguage(lastLocale).catchError((_) {
+        return cloudTranslationController.setLanguage(
+          LocaleSettings.currentLocale.languageCode,
+        );
+      }),
+    );
+  } else {
+    // First time: download device locale
+    unawaited(
+      cloudTranslationController.setLanguage(LocaleSettings.currentLocale.languageCode),
+    );
+  }
 
   runApp(
     CloudTranslationProvider(
@@ -67,7 +91,16 @@ class HomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.t.main.title)),
+      appBar: AppBar(
+        title: Text(context.t.main.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.restore),
+            tooltip: 'Reset to default',
+            onPressed: () => _showResetDialog(context),
+          ),
+        ],
+      ),
       body: Center(child: Text(context.t.main.description)),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.of(context).push<void>(
@@ -76,6 +109,48 @@ class HomeView extends StatelessWidget {
         child: const Icon(Icons.translate),
       ),
     );
+  }
+
+  Future<void> _showResetDialog(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Language'),
+        content: const Text(
+          'This will clear your saved language preference and reset to the default language.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      final controller = CloudTranslationProvider.of(context);
+      final storage = controller.storage as SharedPreferencesSlangCloudStorage;
+
+      await storage.clearAll();
+      await storage.setActiveLocale(LocaleSettings.currentLocale.languageCode);
+
+      unawaited(controller.setLanguage(LocaleSettings.currentLocale.languageCode));
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Language reset to default'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -184,6 +259,10 @@ class _LanguageListViewState extends ConsumerState<LanguageListView> {
     try {
       final controller = CloudTranslationProvider.of(context);
       await controller.setLanguage(language.code);
+
+      // Persist the selected locale
+      final storage = controller.storage as SharedPreferencesSlangCloudStorage;
+      await storage.setActiveLocale(language.code);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

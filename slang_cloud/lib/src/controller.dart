@@ -30,6 +30,9 @@ class CloudTranslationController extends ValueNotifier<CloudState> {
   late final SlangCloudClient _client;
   bool _isProcessing = false;
 
+  /// Gets the storage instance used by this controller.
+  SlangCloudStorage get storage => _storage;
+
   /// Creates a new controller instance.
   ///
   /// [storage] is optional - defaults to in-memory storage.
@@ -67,11 +70,13 @@ class CloudTranslationController extends ValueNotifier<CloudState> {
       value = CloudLoading(
         currentLocale: value.currentLocale,
         lastUpdated: value.lastUpdated,
+        currentHash: value.currentHash,
       );
 
       // Check for update
       final newHash = await _client.checkForUpdate(locale);
 
+      String currentHash;
       if (newHash != null) {
         // Download new translation
         final jsonContent = await _client.downloadTranslation(locale);
@@ -92,18 +97,24 @@ class CloudTranslationController extends ValueNotifier<CloudState> {
         // Cache the translation
         await _storage.setTranslation(locale, jsonContent);
         await _storage.setVersion(locale, newHash);
+        currentHash = newHash;
+      } else {
+        // No update needed, use cached hash
+        currentHash = await _storage.getVersion(locale) ?? '';
       }
 
-      // Success - update to ready state with new locale
+      // Success - update to ready state with new locale and hash
       value = CloudReady(
         currentLocale: locale,
         lastUpdated: DateTime.now(),
+        currentHash: currentHash,
       );
     } catch (e, stackTrace) {
-      // Error - revert to ready state (preserve previous locale)
+      // Error - revert to ready state (preserve previous locale and hash)
       value = CloudReady(
         currentLocale: value.currentLocale,
         lastUpdated: value.lastUpdated,
+        currentHash: value.currentHash,
       );
       debugPrint('SlangCloud Error: $e\n$stackTrace');
       rethrow;

@@ -1,6 +1,6 @@
 # Slang Cloud Server
 
-A Hono-based backend server for slang_cloud package with full translation management API.
+A Hono-based backend server for slang_cloud package with full translation management API and Vue.js 3 Admin Panel.
 
 ## Features
 
@@ -10,6 +10,8 @@ A Hono-based backend server for slang_cloud package with full translation manage
 - **Translation management** (full replace, merge, nested updates)
 - **CORS enabled** for Flutter web
 - **Slang Cloud compatible** endpoints
+- **Vue.js 3 Admin Panel** with key-value editor
+- **Import/Export JSON** functionality
 
 ## Quick Start
 
@@ -25,6 +27,47 @@ bun run start
 ```
 
 Server runs on `http://localhost:3000`
+
+## Admin Panel
+
+Access the web-based admin UI at: **http://localhost:3000/admin**
+
+### Features
+
+- **Visual Language Management**: Add, edit, delete languages
+- **Key-Value Translation Editor**: Simple dot-notation editor
+- **Real-time Hash Display**: See MD5 hash of translations
+- **Import/Export**: Import JSON (merge/replace) or export to file
+- **Clone Languages**: Duplicate existing languages
+- **Responsive Design**: Works on desktop and mobile
+- **Toast Notifications**: Success/error feedback
+
+### Screenshot
+
+```
+┌──────────────────────────────────────────────────────┐
+│ 🌐 Slang Cloud Admin                           v1.0  │
+├──────────────┬───────────────────────────────────────┤
+│              │                                       │
+│ LANGUAGES    │  LANGUAGE EDITOR                      │
+│              │                                       │
+│ [+ Add New]  │  🇺🇸 en    English                     │
+│              │  Hash: a1b2c3d4...                    │
+│ 🔍 Search... │  Updated: 2 mins ago                  │
+│              │                                       │
+│ 🇺🇸 en  ✓    │  Translations:                        │
+│ 🇩🇪 de       │  ┌─────────────────────────────────┐  │
+│              │  │ Key              │ Value        │  │
+│              │  ├──────────────────┼──────────────┤  │
+│              │  │ main.title       │ [Hello   ]   │  │
+│              │  │ main.description │ [World   ]   │  │
+│              │  │ [+ Add Key]                     │  │
+│              │  └─────────────────────────────────┘  │
+│              │                                       │
+│              │  [💾 Save] [📋 Clone] [📤 Export]    │
+│              │                                       │
+└──────────────┴───────────────────────────────────────┘
+```
 
 ## API Endpoints
 
@@ -55,9 +98,27 @@ Server runs on `http://localhost:3000`
 | PATCH | `/languages/:code/translations` | Merge with existing |
 | POST | `/languages/:code/translations` | Add/update specific keys |
 
+### Admin
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin` | Vue.js 3 Admin Panel |
+
 ## Usage Examples
 
-### Create Language
+### Using Admin Panel
+
+1. Open http://localhost:3000/admin
+2. Click **"+ Add Language"** to create a new language
+3. Enter code (e.g., "es"), name, and native name
+4. Click **"Add First Key"** or **"+ Add Key"** to add translations
+5. Use dot notation for nested keys: `main.title`, `common.save`
+6. Click **"Save Changes"** to persist
+7. Use **Import/Export** for bulk operations
+
+### Using API
+
+#### Create Language
 ```bash
 curl -X POST http://localhost:3000/languages \
   -H "Content-Type: application/json" \
@@ -74,7 +135,7 @@ curl -X POST http://localhost:3000/languages \
   }'
 ```
 
-### Update Translations
+#### Update Translations
 ```bash
 # Full replace
 curl -X PUT http://localhost:3000/languages/es/translations \
@@ -92,15 +153,47 @@ curl -X POST http://localhost:3000/languages/es/translations \
   -d '{"common": {"save": "Guardar"}}'
 ```
 
-### Check Version (slang_cloud)
+#### Check Version (slang_cloud)
 ```bash
 curl -I http://localhost:3000/translations/en
 # Returns: X-Translation-Hash: abc123...
 ```
 
+## Admin Panel Tech Stack
+
+- **Vue.js 3**: Composition API with reactive state
+- **Tailwind CSS**: Via CDN for styling
+- **Font Awesome**: Icons via CDN
+- **No Build Step**: Embedded HTML/JS in server
+
+## Key-Value Editor
+
+The admin panel uses a **flat key-value representation** with dot notation:
+
+```
+main.title         → "Slang Cloud Demo"
+main.description   → "This is a description"
+common.save        → "Save"
+common.cancel      → "Cancel"
+```
+
+This is automatically converted to nested JSON when saved:
+```json
+{
+  "main": {
+    "title": "Slang Cloud Demo",
+    "description": "This is a description"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel"
+  }
+}
+```
+
 ## Postman Collection
 
-Import `postman_collection.json` into Postman for easy testing.
+Import `postman_collection.json` into Postman for easy API testing.
 
 ## Default Data
 
@@ -128,6 +221,7 @@ interface Language {
 - **TypeScript**: Full type support
 - **Validation**: JSON validation on all endpoints
 - **Error handling**: Proper HTTP status codes
+- **Admin UI**: No build step required (Vue 3 CDN)
 
 ## Notes
 
@@ -135,6 +229,7 @@ interface Language {
 - All translation updates **auto-calculate** MD5 hash
 - **CORS enabled** for all origins (testing only)
 - Supports **nested JSON** structures
+- **No authentication** (demo/development only)
 
 ## Integration with slang_cloud
 
