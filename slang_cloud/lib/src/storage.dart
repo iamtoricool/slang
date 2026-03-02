@@ -12,6 +12,12 @@ abstract class SlangCloudStorage {
 
   /// Save the version/hash for the given [locale].
   Future<void> setVersion(String locale, String version);
+
+  /// Clear the stored version/hash for the given [locale].
+  Future<void> clearVersion(String locale);
+
+  /// Clear the stored translation for the given [locale].
+  Future<void> clearTranslation(String locale);
 }
 
 /// A simple in-memory storage implementation (useful for testing).
@@ -30,4 +36,10 @@ class InMemorySlangCloudStorage implements SlangCloudStorage {
 
   @override
   Future<void> setVersion(String locale, String version) async => _versions[locale] = version;
+
+  @override
+  Future<void> clearVersion(String locale) async => _versions.remove(locale);
+
+  @override
+  Future<void> clearTranslation(String locale) async => _translations.remove(locale);
 }

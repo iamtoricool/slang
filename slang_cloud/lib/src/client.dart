@@ -96,14 +96,14 @@ class SlangCloudClient {
   }
 
   /// Downloads translation using stream (supports large files).
-  /// Returns the content as string.
+  /// Returns a record with content and hash from server header.
   ///
   /// Supports:
   /// - JSON response (Content-Type: application/json)
   /// - File download (any other Content-Type)
   ///
   /// Throws [SlangCloudException] on failure.
-  Future<String> downloadTranslation(String locale) async {
+  Future<({String content, String hash})> downloadTranslation(String locale) async {
     return _withRetry(
       () => _downloadTranslation(locale),
       locale,
@@ -112,7 +112,7 @@ class SlangCloudClient {
   }
 
   /// Internal download without retry logic.
-  Future<String> _downloadTranslation(String locale) async {
+  Future<({String content, String hash})> _downloadTranslation(String locale) async {
     final url = Uri.parse(config.buildDownloadUrl(locale));
 
     try {
@@ -132,6 +132,15 @@ class SlangCloudClient {
         );
       }
 
+      // Extract hash from response headers
+      final hash = streamedResponse.headers[config.hashHeader.toLowerCase()];
+      if (hash == null) {
+        throw SlangCloudInvalidResponseException(
+          'Missing ${config.hashHeader} header in GET response',
+          locale: locale,
+        );
+      }
+
       final contentType = streamedResponse.headers['content-type']?.toLowerCase() ?? '';
 
       // Validate JSON if content-type indicates JSON
@@ -148,7 +157,7 @@ class SlangCloudClient {
         }
       }
 
-      return responseBody;
+      return (content: responseBody, hash: hash);
     } on SlangCloudException {
       rethrow;
     } on TimeoutException {

@@ -21,6 +21,24 @@ class SlangCloudConfig {
   /// Default: 'X-Translation-Hash'
   final String hashHeader;
 
+  /// Optional hash function for verifying downloaded content integrity.
+  ///
+  /// If provided, calculates hash of downloaded content and compares with
+  /// the hash from server header. If hashes don't match, throws
+  /// [SlangCloudHashMismatchException].
+  ///
+  /// If null (default), skips verification and trusts the server hash.
+  /// This is useful when you want version tracking without cryptographic
+  /// verification, or when using non-standard hash algorithms.
+  ///
+  /// Example with crypto package:
+  /// ```dart
+  /// import 'package:crypto/crypto.dart';
+  ///
+  /// hashFunction: (content) => sha256.convert(utf8.encode(content)).toString(),
+  /// ```
+  final String Function(String content)? hashFunction;
+
   /// Custom headers to send with the requests (e.g. Authorization).
   final Map<String, String> headers;
 
@@ -47,6 +65,7 @@ class SlangCloudConfig {
     this.endpoint = '/translations/{locale}',
     String? downloadEndpoint,
     this.hashHeader = 'X-Translation-Hash',
+    this.hashFunction,
     this.headers = const {},
     this.timeout = const Duration(seconds: 30),
     this.isFlatMap = false,
@@ -84,5 +103,32 @@ class SlangCloudConfig {
     return exception is SlangCloudNetworkException ||
         exception is SlangCloudTimeoutException ||
         (exception is SlangCloudServerException && exception.statusCode >= 500);
+  }
+
+  /// Creates a copy of this config with the given fields replaced.
+  SlangCloudConfig copyWith({
+    String? baseUrl,
+    String? endpoint,
+    String? downloadEndpoint,
+    String? hashHeader,
+    String Function(String content)? hashFunction,
+    Map<String, String>? headers,
+    Duration? timeout,
+    bool? isFlatMap,
+    int? maxRetries,
+    Duration? retryBaseDelay,
+  }) {
+    return SlangCloudConfig(
+      baseUrl: baseUrl ?? this.baseUrl,
+      endpoint: endpoint ?? this.endpoint,
+      downloadEndpoint: downloadEndpoint ?? this.downloadEndpoint,
+      hashHeader: hashHeader ?? this.hashHeader,
+      hashFunction: hashFunction ?? this.hashFunction,
+      headers: headers ?? this.headers,
+      timeout: timeout ?? this.timeout,
+      isFlatMap: isFlatMap ?? this.isFlatMap,
+      maxRetries: maxRetries ?? this.maxRetries,
+      retryBaseDelay: retryBaseDelay ?? this.retryBaseDelay,
+    );
   }
 }

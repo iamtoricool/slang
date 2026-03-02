@@ -140,20 +140,23 @@ void main() {
     });
 
     group('downloadTranslation', () {
-      test('returns body on success', () async {
+      test('returns body and hash on success', () async {
         final client = SlangCloudClient(
           config: config,
           storage: storage,
           client: MockClient((request) async {
             if (request.method == 'GET') {
-              return http.Response('{"hello": "world"}', 200);
+              return http.Response('{"hello": "world"}', 200, headers: {
+                'x-translation-hash': 'test_hash_value',
+              });
             }
             return http.Response('Not Found', 404);
           }),
         );
 
         final result = await client.downloadTranslation('en');
-        expect(result, '{"hello": "world"}');
+        expect(result.content, '{"hello": "world"}');
+        expect(result.hash, 'test_hash_value');
       });
 
       test('validates JSON when Content-Type is application/json', () async {
@@ -163,6 +166,7 @@ void main() {
           client: MockClient((request) async {
             return http.Response('invalid json', 200, headers: {
               'content-type': 'application/json',
+              'x-translation-hash': 'test_hash_value',
             });
           }),
         );
@@ -178,12 +182,15 @@ void main() {
           config: config,
           storage: storage,
           client: MockClient((request) async {
-            return http.Response('plain text content', 200);
+            return http.Response('plain text content', 200, headers: {
+              'x-translation-hash': 'test_hash_value',
+            });
           }),
         );
 
         final result = await client.downloadTranslation('en');
-        expect(result, 'plain text content');
+        expect(result.content, 'plain text content');
+        expect(result.hash, 'test_hash_value');
       });
 
       test('throws SlangCloudServerException on 5xx error', () async {
@@ -191,7 +198,9 @@ void main() {
           config: config,
           storage: storage,
           client: MockClient((request) async {
-            return http.Response('Server Error', 500);
+            return http.Response('Server Error', 500, headers: {
+              'x-translation-hash': 'test_hash_value',
+            });
           }),
         );
 
@@ -212,7 +221,9 @@ void main() {
           config: config,
           storage: storage,
           client: MockClient((request) async {
-            return http.Response('{"error": "details"}', 404);
+            return http.Response('{"error": "details"}', 404, headers: {
+              'x-translation-hash': 'test_hash_value',
+            });
           }),
         );
 
@@ -388,7 +399,9 @@ void main() {
               return http.Response('', 200, headers: {'x-translation-hash': 'hash'});
             } else if (request.method == 'GET') {
               downloadUrl = request.url.toString();
-              return http.Response('{"test": "data"}', 200);
+              return http.Response('{"test": "data"}', 200, headers: {
+                'x-translation-hash': 'test_hash_value',
+              });
             }
             return http.Response('Not Found', 404);
           }),
@@ -414,7 +427,9 @@ void main() {
               return http.Response('', 200, headers: {'x-translation-hash': 'hash'});
             } else if (request.method == 'GET') {
               downloadUrl = request.url.toString();
-              return http.Response('{"test": "data"}', 200);
+              return http.Response('{"test": "data"}', 200, headers: {
+                'x-translation-hash': 'test_hash_value',
+              });
             }
             return http.Response('Not Found', 404);
           }),

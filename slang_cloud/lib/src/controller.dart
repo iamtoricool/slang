@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:slang_cloud/src/client.dart';
@@ -7,7 +6,6 @@ import 'package:slang_cloud/src/config.dart';
 import 'package:slang_cloud/src/exception.dart';
 import 'package:slang_cloud/src/model.dart';
 import 'package:slang_cloud/src/storage.dart';
-import 'package:crypto/crypto.dart';
 
 /// Controller that manages cloud translation downloads and state.
 ///
@@ -60,9 +58,12 @@ class CloudTranslationController extends ValueNotifier<CloudState> {
   /// 2. If update needed, GET request to download
   /// 3. Cache and update state on success
   ///
+  /// If [force] is true, bypasses the cache check and always downloads
+  /// the latest translation from the server.
+  ///
   /// Throws on error - handle on app-side (show snackbar).
   /// On error, previous locale stays active.
-  Future<void> setLanguage(String locale) async {
+  Future<void> setLanguage(String locale, {bool force = false}) async {
     // Prevent concurrent operations
     if (_isProcessing) {
       return;
@@ -77,29 +78,47 @@ class CloudTranslationController extends ValueNotifier<CloudState> {
         currentHash: value.currentHash,
       );
 
-      // Check for update
-      final newHash = await _client.checkForUpdate(locale);
+      String? newHash;
+      if (!force) {
+        // Check for update
+        newHash = await _client.checkForUpdate(locale);
+      }
 
       String currentHash;
-      if (newHash != null) {
-        // Download new translation
-        final jsonContent = await _client.downloadTranslation(locale);
+      if (newHash != null || force) {
+        // Download new translation and get server hash from response
+        final result = await _client.downloadTranslation(locale);
+        final jsonContent = result.content;
+        final serverHash = result.hash;
 
-        // Verify hash
-        final downloadedHash = md5.convert(utf8.encode(jsonContent)).toString();
-        if (downloadedHash != newHash) {
-          throw SlangCloudHashMismatchException(
-            'Hash verification failed: downloaded content may be corrupted',
-            expectedHash: newHash,
-            actualHash: downloadedHash,
-            locale: locale,
-          );
+        // Determine expected hash:
+        // - If we did HEAD request: use that hash
+        // - If force refresh (skipped HEAD): use hash from GET response
+        final expectedHash = newHash ?? serverHash;
+
+        // Verify hash if user provided a hash function
+        if (config.hashFunction != null) {
+          final calculatedHash = config.hashFunction!(jsonContent);
+          if (calculatedHash != expectedHash) {
+            // Clear the stale cache so next attempt will be treated as fresh
+            await _storage.clearVersion(locale);
+            await _storage.clearTranslation(locale);
+
+            throw SlangCloudHashMismatchException(
+              'Hash verification failed: downloaded content may be corrupted. '
+              'Local cache has been cleared. Retry to download fresh.',
+              expectedHash: expectedHash,
+              actualHash: calculatedHash,
+              locale: locale,
+            );
+          }
         }
+        // If no hash function provided, we trust the server hash (no verification)
 
         // Cache the translation
         await _storage.setTranslation(locale, jsonContent);
-        await _storage.setVersion(locale, newHash);
-        currentHash = newHash;
+        await _storage.setVersion(locale, expectedHash);
+        currentHash = expectedHash;
       } else {
         // No update needed, use cached hash
         currentHash = await _storage.getVersion(locale) ?? '';
@@ -111,6 +130,14 @@ class CloudTranslationController extends ValueNotifier<CloudState> {
         lastUpdated: DateTime.now(),
         currentHash: currentHash,
       );
+    } on SlangCloudHashMismatchException {
+      // Revert to ready state (preserve previous locale and hash)
+      value = CloudReady(
+        currentLocale: value.currentLocale,
+        lastUpdated: value.lastUpdated,
+        currentHash: value.currentHash,
+      );
+      rethrow;
     } catch (e, stackTrace) {
       // Error - revert to ready state (preserve previous locale and hash)
       value = CloudReady(

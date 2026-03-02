@@ -16,14 +16,18 @@ void main() {
       expect(config.isFlatMap, false);
       expect(config.maxRetries, 3);
       expect(config.retryBaseDelay, Duration(milliseconds: 500));
+      expect(config.hashFunction, isNull);
     });
 
     test('accepts custom values', () {
-      const config = SlangCloudConfig(
+      String customHashFunction(String content) => 'custom_$content';
+
+      final config = SlangCloudConfig(
         baseUrl: 'https://custom.example.com',
         endpoint: '/custom/{locale}',
         downloadEndpoint: '/custom/{locale}/download',
         hashHeader: 'Custom-Hash',
+        hashFunction: customHashFunction,
         headers: {'Authorization': 'Bearer token'},
         timeout: Duration(seconds: 60),
         isFlatMap: true,
@@ -35,6 +39,7 @@ void main() {
       expect(config.endpoint, '/custom/{locale}');
       expect(config.downloadEndpoint, '/custom/{locale}/download');
       expect(config.hashHeader, 'Custom-Hash');
+      expect(config.hashFunction, isNotNull);
       expect(config.headers, {'Authorization': 'Bearer token'});
       expect(config.timeout, Duration(seconds: 60));
       expect(config.isFlatMap, true);
