@@ -1,5 +1,11 @@
 dependency_overrides:
   slang:
-    path: ../slang
+    git:
+      url: https://github.com/iamtoricool/slang.git
+      ref: stable
+      path: slang
   slang_cli:
-    path: ../slang_cli
+    git:
+      url: https://github.com/iamtoricool/slang.git
+      ref: stable
+      path: slang_cli

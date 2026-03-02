@@ -1,3 +1,6 @@
 dependency_overrides:
   slang:
-    path: ../slang
+    git:
+      url: https://github.com/iamtoricool/slang.git
+      ref: stable
+      path: slang
