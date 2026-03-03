@@ -1,67 +1,49 @@
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slang_cloud/slang_cloud.dart';
 
 /// SharedPreferences implementation of SlangCloudStorage.
-/// Persists translations, versions, and active locale to device storage.
+/// Persists translations with metadata to device storage.
 class SharedPreferencesSlangCloudStorage implements SlangCloudStorage {
-  static const String _translationsPrefix = 'slang_cloud_translations_';
-  static const String _versionsPrefix = 'slang_cloud_versions_';
-  static const String _activeLocaleKey = 'slang_cloud_active_locale';
+  static const String _cacheKey = 'slang_cloud_cached';
 
   SharedPreferences? _prefs;
+
+  /// Private constructor
+  SharedPreferencesSlangCloudStorage._();
+
+  /// Factory constructor that initializes SharedPreferences
+  static Future<SharedPreferencesSlangCloudStorage> create() async {
+    final storage = SharedPreferencesSlangCloudStorage._();
+    await storage._init();
+    return storage;
+  }
 
   Future<void> _init() async {
     _prefs ??= await SharedPreferences.getInstance();
   }
 
   @override
-  Future<String?> getTranslation(String locale) async {
-    await _init();
-    return _prefs!.getString('$_translationsPrefix$locale');
-  }
+  Future<CachedTranslations?> getCached() async {
+    final jsonStr = _prefs!.getString(_cacheKey);
+    if (jsonStr == null) return null;
 
-  @override
-  Future<void> setTranslation(String locale, String content) async {
-    await _init();
-    await _prefs!.setString('$_translationsPrefix$locale', content);
-  }
-
-  @override
-  Future<String?> getVersion(String locale) async {
-    await _init();
-    return _prefs!.getString('$_versionsPrefix$locale');
-  }
-
-  @override
-  Future<void> setVersion(String locale, String version) async {
-    await _init();
-    await _prefs!.setString('$_versionsPrefix$locale', version);
-  }
-
-  /// Get the last active locale from storage.
-  Future<String?> getActiveLocale() async {
-    await _init();
-    return _prefs!.getString(_activeLocaleKey);
-  }
-
-  /// Set the active locale in storage.
-  Future<void> setActiveLocale(String? locale) async {
-    await _init();
-    if (locale != null) {
-      await _prefs!.setString(_activeLocaleKey, locale);
-    } else {
-      await _prefs!.remove(_activeLocaleKey);
+    try {
+      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+      return CachedTranslations.fromJson(map);
+    } catch (e) {
+      return null;
     }
   }
 
-  /// Clear all stored data (for testing/reset).
-  Future<void> clearAll() async {
-    await _init();
-    final keys = _prefs!.getKeys().where(
-      (key) => key.startsWith(_translationsPrefix) || key.startsWith(_versionsPrefix) || key == _activeLocaleKey,
-    );
-    for (final key in keys) {
-      await _prefs!.remove(key);
-    }
+  @override
+  Future<void> setCached(CachedTranslations cached) async {
+    final jsonStr = jsonEncode(cached.toJson());
+    await _prefs!.setString(_cacheKey, jsonStr);
+  }
+
+  @override
+  Future<void> clear() async {
+    await _prefs!.remove(_cacheKey);
   }
 }

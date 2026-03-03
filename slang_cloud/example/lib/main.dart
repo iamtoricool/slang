@@ -15,46 +15,32 @@ Future<void> main() async {
   LocaleSettings.useDeviceLocale();
 
   // Create storage with SharedPreferences
-  final storage = SharedPreferencesSlangCloudStorage();
+  final storage = await SharedPreferencesSlangCloudStorage.create();
 
-  final cloudTranslationController = CloudTranslationController(
-    config: SlangCloudConfig(
-      baseUrl: 'http://10.0.2.2:3000',
-      endpoint: '/api/translations/{locale}/check',
-      downloadEndpoint: '/api/translations/{locale}/download',
-      isFlatMap: false,
-    ),
+  // Create the cloud client with callbacks for slang integration
+  final cloudClient = await SlangCloudClient.create(
+    baseUrl: 'http://10.0.2.2:3000',
+    hashHeader: 'X-Translation-Hash',
+    isFlatMap: false,
     storage: storage,
+    applyTranslations: (locale, translations, isFlatMap) async {
+      await LocaleSettings.instance.overrideTranslationsFromMap(
+        locale: AppLocaleUtils.parse(locale),
+        map: translations,
+        isFlatMap: isFlatMap,
+      );
+    },
+    setFallback: () async {
+      // Use device locale as fallback
+      await LocaleSettings.setLocale(LocaleSettings.currentLocale);
+    },
   );
 
-  // Restore last active language or download device locale
-  final lastLocale = await storage.getActiveLocale();
-  if (lastLocale != null) {
-    // Try to restore last locale, fallback to device locale on error
-    unawaited(
-      cloudTranslationController.setLanguage(lastLocale).catchError((_) async {
-        await storage.setActiveLocale(null);
-        return cloudTranslationController.setLanguage(
-          LocaleSettings.currentLocale.languageCode,
-        );
-      }),
-    );
-  } else {
-    // First time: download device locale
-    unawaited(
-      cloudTranslationController.setLanguage(LocaleSettings.currentLocale.languageCode),
-    );
-  }
-
   runApp(
-    CloudTranslationProvider(
-      controller: cloudTranslationController,
-      onTranslationsReceived: (locale, translations, isFlatMap) {
-        return LocaleSettings.instance.overrideTranslationsFromMap(
-          locale: AppLocaleUtils.parse(locale),
-          map: translations,
-          isFlatMap: isFlatMap,
-        );
+    SlangCloudProvider(
+      client: cloudClient,
+      onError: (error) {
+        debugPrint('SlangCloud error: $error');
       },
       child: TranslationProvider(
         child: ProviderScope(
@@ -66,7 +52,7 @@ Future<void> main() async {
 }
 
 final languageListProvider = FutureProvider<List<LanguageModel>>((ref) async {
-  final response = await http.get(Uri.parse('http://10.0.2.2:3000/api/languages'));
+  final response = await http.get(Uri.parse('http://10.0.2.2:3000/languages'));
 
   if (response.statusCode == 200) {
     final List<dynamic> data = jsonDecode(response.body);
@@ -136,13 +122,13 @@ class HomeView extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      final controller = CloudTranslationProvider.of(context);
-      final storage = controller.storage as SharedPreferencesSlangCloudStorage;
+      final client = SlangCloudProvider.of(context);
 
-      await storage.clearAll();
-      await storage.setActiveLocale(LocaleSettings.currentLocale.languageCode);
+      // Clear cache
+      await client.clearCache();
 
-      unawaited(controller.setLanguage(LocaleSettings.currentLocale.languageCode));
+      // Reset to device locale
+      await LocaleSettings.setLocale(LocaleSettings.currentLocale);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -165,19 +151,27 @@ class LanguageListView extends ConsumerStatefulWidget {
 
 class _LanguageListViewState extends ConsumerState<LanguageListView> {
   String? _switchingLanguageCode;
+  bool _checkingUpdate = false;
 
   @override
   Widget build(BuildContext context) {
     final languageList = ref.watch(languageListProvider);
-    final controller = CloudTranslationProvider.of(context);
+    final client = SlangCloudProvider.of(context);
+    final currentLocale = client.currentLocale;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(context.t.languageList.title),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => controller.checkForUpdates(),
+            icon: _checkingUpdate
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: _checkingUpdate ? null : () => _checkForUpdates(client),
           ),
         ],
       ),
@@ -185,37 +179,32 @@ class _LanguageListViewState extends ConsumerState<LanguageListView> {
         onRefresh: () => ref.refresh(languageListProvider.future),
         child: languageList.when(
           data: (languages) {
-            return ValueListenableBuilder<CloudState>(
-              valueListenable: controller,
-              builder: (_, languageState, _) {
-                return ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  itemCount: languages.length,
-                  itemBuilder: (context, index) {
-                    final language = languages[index];
-                    final isSelected = language.code == languageState.currentLocale;
-                    final isSwitching = _switchingLanguageCode == language.code;
+            return ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: languages.length,
+              itemBuilder: (context, index) {
+                final language = languages[index];
+                final isSelected = language.code == currentLocale;
+                final isSwitching = _switchingLanguageCode == language.code;
 
-                    return ListTile(
-                      leading: isSwitching
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : isSelected
-                          ? const Icon(Icons.check_circle, color: Colors.green)
-                          : const Icon(Icons.language),
-                      title: Text(language.name),
-                      subtitle: Text('${language.nativeName} • ${language.code.toUpperCase()}'),
-                      trailing: Text(
-                        language.updatedAt.toString().substring(0, 10),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      selected: isSelected,
-                      onTap: isSwitching ? null : () => _switchLanguage(language),
-                    );
-                  },
+                return ListTile(
+                  leading: isSwitching
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : isSelected
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : const Icon(Icons.language),
+                  title: Text(language.name),
+                  subtitle: Text('${language.nativeName} • ${language.code.toUpperCase()}'),
+                  trailing: Text(
+                    language.updatedAt.toString().substring(0, 10),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  selected: isSelected,
+                  onTap: isSwitching ? null : () => _switchLanguage(language),
                 );
               },
             );
@@ -253,18 +242,59 @@ class _LanguageListViewState extends ConsumerState<LanguageListView> {
     );
   }
 
+  Future<void> _checkForUpdates(SlangCloudClient client) async {
+    setState(() {
+      _checkingUpdate = true;
+    });
+
+    try {
+      final hasUpdate = await client.hasUpdate();
+
+      if (mounted) {
+        if (hasUpdate) {
+          final updated = await client.updateIfAvailable();
+          if (updated && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Translations updated successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Translations are up to date'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to check for updates: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingUpdate = false;
+        });
+      }
+    }
+  }
+
   Future<void> _switchLanguage(LanguageModel language) async {
     setState(() {
       _switchingLanguageCode = language.code;
     });
 
     try {
-      final controller = CloudTranslationProvider.of(context);
-      await controller.setLanguage(language.code);
-
-      // Persist the selected locale
-      final storage = controller.storage as SharedPreferencesSlangCloudStorage;
-      await storage.setActiveLocale(language.code);
+      final client = SlangCloudProvider.of(context);
+      await client.setLanguage(language.code);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
