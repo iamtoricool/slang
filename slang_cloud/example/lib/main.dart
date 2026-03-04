@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 
+import 'package:example/models/language_model.dart';
+import 'package:example/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 import 'package:slang_cloud/slang_cloud.dart';
 
 import 'i18n/strings.g.dart';
-import 'models/language_model.dart';
 import 'storage/shared_prefs_storage.dart';
 
 Future<void> main() async {
@@ -17,50 +16,27 @@ Future<void> main() async {
   // Create storage with SharedPreferences
   final storage = await SharedPreferencesSlangCloudStorage.create();
 
-  // Create the cloud client with callbacks for slang integration
-  final cloudClient = await SlangCloudClient.create(
-    baseUrl: 'http://10.0.2.2:3000',
-    hashHeader: 'X-Translation-Hash',
-    isFlatMap: false,
-    storage: storage,
-    applyTranslations: (locale, translations, isFlatMap) async {
-      await LocaleSettings.instance.overrideTranslationsFromMap(
-        locale: AppLocaleUtils.parse(locale),
-        map: translations,
-        isFlatMap: isFlatMap,
-      );
-    },
-    setFallback: () async {
-      // Use device locale as fallback
-      await LocaleSettings.setLocale(LocaleSettings.currentLocale);
-    },
-  );
+  // Pre-initialize cloud client (loads cached translations from storage)
+  // Change this to createHonoClient(storage) for Hono server
+  final client = await createLaravelClient(storage);
 
   runApp(
-    SlangCloudProvider(
-      client: cloudClient,
-      onError: (error) {
-        debugPrint('SlangCloud error: $error');
-      },
-      child: TranslationProvider(
-        child: ProviderScope(
+    ProviderScope(
+      overrides: [
+        languageListProvider.overrideWith((ref) async => fetchLaravelLanguages()),
+      ],
+      child: SlangCloudProvider(
+        client: client,
+        onError: (error) {
+          debugPrint('SlangCloud error: $error');
+        },
+        child: TranslationProvider(
           child: const MainApp(),
         ),
       ),
     ),
   );
 }
-
-final languageListProvider = FutureProvider<List<LanguageModel>>((ref) async {
-  final response = await http.get(Uri.parse('http://10.0.2.2:3000/languages'));
-
-  if (response.statusCode == 200) {
-    final List<dynamic> data = jsonDecode(response.body);
-    return data.map((e) => LanguageModel.fromJson(e)).toList();
-  } else {
-    throw Exception('Failed to load languages: ${response.statusCode}');
-  }
-}, retry: (retryCount, error) => null);
 
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
@@ -94,6 +70,7 @@ class HomeView extends StatelessWidget {
         onPressed: () => Navigator.of(context).push<void>(
           MaterialPageRoute(builder: (_) => const LanguageListView()),
         ),
+        heroTag: 'languageSelector',
         child: const Icon(Icons.translate),
       ),
     );
@@ -122,21 +99,30 @@ class HomeView extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      final client = SlangCloudProvider.of(context);
+      try {
+        // Clear cache
+        await SlangCloudProvider.of(context).clearCache();
 
-      // Clear cache
-      await client.clearCache();
+        // Reset to device locale
+        await LocaleSettings.setLocale(LocaleSettings.currentLocale);
 
-      // Reset to device locale
-      await LocaleSettings.setLocale(LocaleSettings.currentLocale);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Language reset to default'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Language reset to default'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to reset'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -157,7 +143,6 @@ class _LanguageListViewState extends ConsumerState<LanguageListView> {
   Widget build(BuildContext context) {
     final languageList = ref.watch(languageListProvider);
     final client = SlangCloudProvider.of(context);
-    final currentLocale = client.currentLocale;
 
     return Scaffold(
       appBar: AppBar(
@@ -176,9 +161,11 @@ class _LanguageListViewState extends ConsumerState<LanguageListView> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.refresh(languageListProvider.future),
+        onRefresh: () async => ref.invalidate(languageListProvider),
         child: languageList.when(
           data: (languages) {
+            final currentLocale = client.currentLocale ?? LocaleSettings.currentLocale.languageCode;
+
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               itemCount: languages.length,
@@ -204,40 +191,42 @@ class _LanguageListViewState extends ConsumerState<LanguageListView> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   selected: isSelected,
-                  onTap: isSwitching ? null : () => _switchLanguage(language),
+                  onTap: isSwitching ? null : () => _switchLanguage(client, language),
                 );
               },
             );
           },
-          error: (error, stackTrace) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Failed to load languages',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    error.toString(),
-                    style: Theme.of(context).textTheme.bodySmall,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: () => ref.refresh(languageListProvider),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          },
+          error: (error, stackTrace) => _buildErrorWidget(error),
           loading: () => const Center(child: CircularProgressIndicator()),
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorWidget(Object error) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
+          const SizedBox(height: 16),
+          Text(
+            'Failed to load languages',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            error.toString(),
+            style: Theme.of(context).textTheme.bodySmall,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => ref.invalidate(languageListProvider),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
       ),
     );
   }
@@ -287,13 +276,12 @@ class _LanguageListViewState extends ConsumerState<LanguageListView> {
     }
   }
 
-  Future<void> _switchLanguage(LanguageModel language) async {
+  Future<void> _switchLanguage(SlangCloudClient client, LanguageModel language) async {
     setState(() {
       _switchingLanguageCode = language.code;
     });
 
     try {
-      final client = SlangCloudProvider.of(context);
       await client.setLanguage(language.code);
 
       if (mounted) {

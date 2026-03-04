@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,7 +64,7 @@ void main() {
         final failingStorage = _FailingStorage();
         var fallbackCalled = false;
 
-        final client = await SlangCloudClient.create(
+        await SlangCloudClient.create(
           baseUrl: 'https://api.example.com',
           applyTranslations: (locale, map, isFlatMap) async {},
           setFallback: () async {
@@ -146,6 +147,239 @@ void main() {
           () => client.setLanguage('de'),
           throwsA(isA<SlangCloudException>()),
         );
+      });
+
+      group('stale response handling', () {
+        test('ignores response when locale changed during download', () async {
+          final completers = <String, Completer<http.Response>>{
+            'de': Completer(),
+            'fr': Completer(),
+          };
+
+          final mockClient = MockClient((request) async {
+            final locale = request.url.pathSegments.last;
+            return completers[locale]!.future;
+          });
+
+          var appliedLocales = <String>[];
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {
+              appliedLocales.add(locale);
+            },
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+          );
+
+          // Start downloading 'de' but don't complete it
+          final deFuture = client.setLanguage('de');
+
+          // Switch to 'fr' before 'de' completes
+          final frFuture = client.setLanguage('fr');
+
+          // Complete 'fr' first
+          completers['fr']!.complete(http.Response(
+            jsonEncode({'hello': 'fr'}),
+            200,
+            headers: {'x-translation-hash': 'fr-hash'},
+          ));
+          await frFuture;
+
+          // Complete 'de' response - should be ignored since 'fr' was requested after
+          completers['de']!.complete(http.Response(
+            jsonEncode({'hello': 'de'}),
+            200,
+            headers: {'x-translation-hash': 'de-hash'},
+          ));
+          await deFuture;
+
+          // Only 'fr' should be applied (plus initial create)
+          expect(appliedLocales, ['fr']); // create doesn't apply anything when no cache
+          expect(client.currentLocale, 'fr');
+          expect(client.currentHash, 'fr-hash');
+        });
+
+        test('does not throw timeout when locale changed', () async {
+          final completers = <String, Completer<http.Response>>{
+            'de': Completer(),
+            'fr': Completer(),
+          };
+
+          final mockClient = MockClient((request) async {
+            final locale = request.url.pathSegments.last;
+            return completers[locale]!.future;
+          });
+
+          var errorThrown = false;
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {},
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+            timeout: const Duration(milliseconds: 50),
+          );
+
+          // Start slow 'de' request that will timeout
+          final deFuture = client.setLanguage('de').catchError((e) {
+            errorThrown = true;
+            return null;
+          });
+
+          // Small delay to ensure 'de' starts first
+          await Future.delayed(const Duration(milliseconds: 10));
+
+          // Switch to 'fr' before 'de' times out
+          final frFuture = client.setLanguage('fr');
+
+          // Complete 'fr' successfully
+          completers['fr']!.complete(http.Response(
+            jsonEncode({'hello': 'fr'}),
+            200,
+            headers: {'x-translation-hash': 'fr-hash'},
+          ));
+          await frFuture;
+
+          // Let 'de' timeout
+          await Future.delayed(const Duration(milliseconds: 100));
+
+          // Complete 'de' with timeout
+          completers['de']!.completeError(TimeoutException('timeout'));
+
+          try {
+            await deFuture;
+          } catch (_) {}
+
+          // No error should be thrown for the stale 'de' request
+          expect(errorThrown, false);
+          expect(client.currentLocale, 'fr');
+        });
+
+        test('does not throw format error when locale changed', () async {
+          final completers = <String, Completer<http.Response>>{
+            'de': Completer(),
+            'fr': Completer(),
+          };
+
+          final mockClient = MockClient((request) async {
+            final locale = request.url.pathSegments.last;
+            return completers[locale]!.future;
+          });
+
+          var errorThrown = false;
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {},
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+          );
+
+          // Start 'de' request
+          final deFuture = client.setLanguage('de').catchError((e) {
+            errorThrown = true;
+            return null;
+          });
+
+          // Small delay then switch to 'fr'
+          await Future.delayed(Duration.zero);
+          final frFuture = client.setLanguage('fr');
+
+          // Complete 'fr' successfully
+          completers['fr']!.complete(http.Response(
+            jsonEncode({'hello': 'fr'}),
+            200,
+            headers: {'x-translation-hash': 'fr-hash'},
+          ));
+          await frFuture;
+
+          // Complete 'de' with invalid JSON - should be ignored
+          completers['de']!.complete(http.Response('invalid json', 200));
+
+          try {
+            await deFuture;
+          } catch (_) {}
+
+          // No error should be thrown for the stale 'de' request
+          expect(errorThrown, false);
+          expect(client.currentLocale, 'fr');
+        });
+
+        test('handles multiple rapid locale switches', () async {
+          final responses = <String, Completer<http.Response>>{
+            'de': Completer(),
+            'fr': Completer(),
+            'es': Completer(),
+          };
+
+          final mockClient = MockClient((request) async {
+            final locale = request.url.pathSegments.last;
+            return responses[locale]!.future;
+          });
+
+          var lastAppliedLocale = '';
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {
+              lastAppliedLocale = locale;
+            },
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+          );
+
+          // Start all three requests
+          unawaited(client.setLanguage('de'));
+          unawaited(client.setLanguage('fr'));
+          unawaited(client.setLanguage('es'));
+
+          // Complete in reverse order
+          responses['de']!.complete(http.Response(
+            jsonEncode({'hello': 'de'}),
+            200,
+            headers: {'x-translation-hash': 'de-hash'},
+          ));
+
+          responses['fr']!.complete(http.Response(
+            jsonEncode({'hello': 'fr'}),
+            200,
+            headers: {'x-translation-hash': 'fr-hash'},
+          ));
+
+          responses['es']!.complete(http.Response(
+            jsonEncode({'hello': 'es'}),
+            200,
+            headers: {'x-translation-hash': 'es-hash'},
+          ));
+
+          // Wait for all to complete
+          await Future.delayed(const Duration(milliseconds: 50));
+
+          // Only 'es' should be applied (the last one)
+          expect(lastAppliedLocale, 'es');
+          expect(client.currentLocale, 'es');
+          expect(client.currentHash, 'es-hash');
+        });
+
+        test('still throws error when locale has not changed', () async {
+          final mockClient = MockClient((request) async {
+            return http.Response('Not Found', 404);
+          });
+
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {},
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+          );
+
+          expect(
+            () => client.setLanguage('de'),
+            throwsA(isA<SlangCloudException>()),
+          );
+        });
       });
     });
 

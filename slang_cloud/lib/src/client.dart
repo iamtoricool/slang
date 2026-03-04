@@ -35,6 +35,10 @@ class SlangCloudClient {
   String? _currentLocale;
   String? _currentHash;
 
+  // Counter to track the most recent setLanguage request.
+  // Used to ignore stale responses when user switches locales rapidly.
+  int _requestId = 0;
+
   SlangCloudClient._({
     required this.baseUrl,
     required this.storage,
@@ -100,10 +104,25 @@ class SlangCloudClient {
   /// Download and set a new language.
   ///
   /// Downloads from server, caches to storage, and applies to app.
+  /// If the user switches locales while downloading, the stale response
+  /// is silently ignored.
   /// Throws [SlangCloudException] on failure.
   Future<void> setLanguage(String locale) async {
+    // Increment counter and capture the request ID for this call.
+    // If another setLanguage call happens while this one is in flight,
+    // the counter will increase, and we can detect this request is stale.
+    final requestId = ++_requestId;
+
+    // Helper to check if this request is still the most recent one.
+    bool isStale() => _requestId != requestId;
+
     try {
       final response = await _client.get(Uri.parse('$baseUrl/translations/$locale')).timeout(timeout);
+
+      // Ignore if user switched to different locale while downloading
+      if (isStale()) {
+        return;
+      }
 
       if (response.statusCode == 200) {
         final serverHash = response.headers[hashHeader.toLowerCase()] ?? '';
@@ -124,11 +143,20 @@ class SlangCloudClient {
         throw SlangCloudException('Failed to download translations: ${response.statusCode}');
       }
     } on TimeoutException {
-      throw SlangCloudException('Request timed out');
+      // Only throw if this is still the most recent request
+      if (!isStale()) {
+        throw SlangCloudException('Request timed out');
+      }
     } on FormatException catch (e) {
-      throw SlangCloudException('Invalid response format: $e');
+      // Only throw if this is still the most recent request
+      if (!isStale()) {
+        throw SlangCloudException('Invalid response format: $e');
+      }
     } catch (e) {
-      throw SlangCloudException('Failed to set language: $e');
+      // Only throw if this is still the most recent request
+      if (!isStale()) {
+        throw SlangCloudException('Failed to set language: $e');
+      }
     }
   }
 

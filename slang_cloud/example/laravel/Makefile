@@ -13,8 +13,8 @@ install:
 up:
 	@docker-compose up -d
 	@echo "✅ Services started!"
-	@echo "🌐 API: http://localhost:3000"
-	@echo "🎛️  Admin: http://localhost:3000/admin"
+	@echo "🌐 API: http://localhost:8000"
+	@echo "🎛️  Admin: http://localhost:8000/admin"
 
 down:
 	@docker-compose down
@@ -57,8 +57,8 @@ key-generate:
 # Full setup
 setup: install up key-generate permissions migrate seed
 	@echo "✅ Laravel Slang Cloud is ready!"
-	@echo "🌐 API: http://localhost:3000"
-	@echo "🎛️  Admin: http://localhost:3000/admin"
+	@echo "🌐 API: http://localhost:8000"
+	@echo "🎛️  Admin: http://localhost:8000/admin"
 
 logs:
 	@docker-compose logs -f
