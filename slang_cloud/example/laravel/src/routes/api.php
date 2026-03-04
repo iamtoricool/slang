@@ -24,7 +24,10 @@ Route::get('/', function () {
 });
 
 // Translation endpoints (for slang_cloud client)
-// HEAD method works automatically with GET routes in Laravel
+// Primary endpoints that match SlangCloudClient expectations
+Route::match(['get', 'head'], '/translations/{locale}', [TranslationController::class, 'download']);
+
+// Alternative endpoints (for explicit actions)
 Route::get('/translations/{locale}/check', [TranslationController::class, 'check']);
 Route::get('/translations/{locale}/download', [TranslationController::class, 'download']);
 

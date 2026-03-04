@@ -1,456 +1,669 @@
 import 'dart:async';
-import 'dart:io';
-
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:slang_cloud/slang_cloud.dart';
-import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('SlangCloudClient', () {
-    late SlangCloudConfig config;
     late InMemorySlangCloudStorage storage;
 
     setUp(() {
-      config = const SlangCloudConfig(baseUrl: 'https://api.example.com');
       storage = InMemorySlangCloudStorage();
     });
 
-    group('checkForUpdate', () {
-      test('returns new hash if different from storage', () async {
-        final client = SlangCloudClient(
-          config: config,
-          storage: storage,
-          client: MockClient((request) async {
-            if (request.method == 'HEAD' && request.url.toString() == 'https://api.example.com/translations/en') {
-              return http.Response('', 200, headers: {'x-translation-hash': 'new_hash'});
-            }
-            return http.Response('Not Found', 404);
-          }),
-        );
+    group('create', () {
+      test('loads cached translations on initialization', () async {
+        final translations = {'hello': 'world'};
+        await storage.setCached(CachedTranslations(
+          locale: 'en',
+          hash: 'hash123',
+          translations: translations,
+        ));
 
-        await storage.setVersion('en', 'old_hash');
-        final result = await client.checkForUpdate('en');
+        String? appliedLocale;
+        Map<String, dynamic>? appliedTranslations;
 
-        expect(result, 'new_hash');
-      });
-
-      test('returns null if hash matches storage', () async {
-        final client = SlangCloudClient(
-          config: config,
-          storage: storage,
-          client: MockClient((request) async {
-            if (request.method == 'HEAD') {
-              return http.Response('', 200, headers: {'x-translation-hash': 'same_hash'});
-            }
-            return http.Response('Not Found', 404);
-          }),
-        );
-
-        await storage.setVersion('en', 'same_hash');
-        final result = await client.checkForUpdate('en');
-
-        expect(result, isNull);
-      });
-
-      test('throws SlangCloudNotFoundException on 404', () async {
-        final client = SlangCloudClient(
-          config: config,
-          storage: storage,
-          client: MockClient((request) async {
-            return http.Response('Not Found', 404);
-          }),
-        );
-
-        expect(
-          () => client.checkForUpdate('en'),
-          throwsA(isA<SlangCloudNotFoundException>()),
-        );
-      });
-
-      test('throws SlangCloudUnauthorizedException on 401', () async {
-        final client = SlangCloudClient(
-          config: config,
-          storage: storage,
-          client: MockClient((request) async {
-            return http.Response('Unauthorized', 401);
-          }),
-        );
-
-        expect(
-          () => client.checkForUpdate('en'),
-          throwsA(isA<SlangCloudUnauthorizedException>()),
-        );
-      });
-
-      test('throws SlangCloudInvalidResponseException when hash header is missing', () async {
-        final client = SlangCloudClient(
-          config: config,
-          storage: storage,
-          client: MockClient((request) async {
-            return http.Response('', 200);
-          }),
-        );
-
-        expect(
-          () => client.checkForUpdate('en'),
-          throwsA(
-            isA<SlangCloudInvalidResponseException>().having(
-              (e) => e.message,
-              'message',
-              contains('X-Translation-Hash'),
-            ),
-          ),
-        );
-      });
-
-      test('throws SlangCloudTimeoutException on timeout', () async {
-        final config = const SlangCloudConfig(
+        final client = await SlangCloudClient.create(
           baseUrl: 'https://api.example.com',
-          timeout: Duration(milliseconds: 1),
-        );
-
-        final client = SlangCloudClient(
-          config: config,
+          applyTranslations: (locale, map, isFlatMap) async {
+            appliedLocale = locale;
+            appliedTranslations = map;
+          },
+          setFallback: () async {},
           storage: storage,
-          client: MockClient((request) async {
-            await Future.delayed(Duration(milliseconds: 100));
-            return http.Response('', 200, headers: {'x-translation-hash': 'hash'});
-          }),
         );
 
-        expect(
-          () => client.checkForUpdate('en'),
-          throwsA(isA<SlangCloudTimeoutException>()),
-        );
+        expect(client.currentLocale, 'en');
+        expect(client.currentHash, 'hash123');
+        expect(appliedLocale, 'en');
+        expect(appliedTranslations, translations);
       });
 
-      test('throws SlangCloudNetworkException on socket error', () async {
-        final client = SlangCloudClient(
-          config: config,
+      test('uses fallback when no cache exists', () async {
+        var fallbackCalled = false;
+
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {
+            fallbackCalled = true;
+          },
           storage: storage,
-          client: _MockClientWithSocketError(),
         );
 
-        expect(
-          () => client.checkForUpdate('en'),
-          throwsA(isA<SlangCloudNetworkException>()),
+        expect(client.currentLocale, isNull);
+        expect(client.currentHash, isNull);
+        expect(fallbackCalled, true);
+      });
+
+      test('uses fallback when cache load fails', () async {
+        // Create a storage that throws on getCached
+        final failingStorage = _FailingStorage();
+        var fallbackCalled = false;
+
+        await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {
+            fallbackCalled = true;
+          },
+          storage: failingStorage,
         );
+
+        expect(fallbackCalled, true);
       });
     });
 
-    group('downloadTranslation', () {
-      test('returns body on success', () async {
-        final client = SlangCloudClient(
-          config: config,
+    group('setLanguage', () {
+      test('downloads and applies translations', () async {
+        final translations = {'hello': 'world'};
+        final mockClient = MockClient((request) async {
+          return http.Response(
+            jsonEncode(translations),
+            200,
+            headers: {'x-translation-hash': 'server-hash'},
+          );
+        });
+
+        String? appliedLocale;
+        Map<String, dynamic>? appliedTranslations;
+
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {
+            appliedLocale = locale;
+            appliedTranslations = map;
+          },
+          setFallback: () async {},
           storage: storage,
-          client: MockClient((request) async {
-            if (request.method == 'GET') {
-              return http.Response('{"hello": "world"}', 200);
-            }
-            return http.Response('Not Found', 404);
-          }),
+          httpClient: mockClient,
         );
 
-        final result = await client.downloadTranslation('en');
-        expect(result, '{"hello": "world"}');
+        await client.setLanguage('de');
+
+        expect(client.currentLocale, 'de');
+        expect(client.currentHash, 'server-hash');
+        expect(appliedLocale, 'de');
+        expect(appliedTranslations, translations);
+
+        // Verify cached
+        final cached = await storage.getCached();
+        expect(cached?.locale, 'de');
+        expect(cached?.hash, 'server-hash');
       });
 
-      test('validates JSON when Content-Type is application/json', () async {
-        final client = SlangCloudClient(
-          config: config,
+      test('throws on HTTP error', () async {
+        final mockClient = MockClient((request) async {
+          return http.Response('Not Found', 404);
+        });
+
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {},
           storage: storage,
-          client: MockClient((request) async {
-            return http.Response('invalid json', 200, headers: {
-              'content-type': 'application/json',
+          httpClient: mockClient,
+        );
+
+        expect(
+          () => client.setLanguage('de'),
+          throwsA(isA<SlangCloudException>()),
+        );
+      });
+
+      test('throws on timeout', () async {
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {},
+          storage: storage,
+          timeout: const Duration(milliseconds: 1),
+        );
+
+        expect(
+          () => client.setLanguage('de'),
+          throwsA(isA<SlangCloudException>()),
+        );
+      });
+
+      group('stale response handling', () {
+        test('ignores response when locale changed during download', () async {
+          final completers = <String, Completer<http.Response>>{
+            'de': Completer(),
+            'fr': Completer(),
+          };
+
+          final mockClient = MockClient((request) async {
+            final locale = request.url.pathSegments.last;
+            return completers[locale]!.future;
+          });
+
+          var appliedLocales = <String>[];
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {
+              appliedLocales.add(locale);
+            },
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+          );
+
+          // Start downloading 'de' but don't complete it
+          final deFuture = client.setLanguage('de');
+
+          // Switch to 'fr' before 'de' completes
+          final frFuture = client.setLanguage('fr');
+
+          // Complete 'fr' first
+          completers['fr']!.complete(http.Response(
+            jsonEncode({'hello': 'fr'}),
+            200,
+            headers: {'x-translation-hash': 'fr-hash'},
+          ));
+          await frFuture;
+
+          // Complete 'de' response - should be ignored since 'fr' was requested after
+          completers['de']!.complete(http.Response(
+            jsonEncode({'hello': 'de'}),
+            200,
+            headers: {'x-translation-hash': 'de-hash'},
+          ));
+          await deFuture;
+
+          // Only 'fr' should be applied (plus initial create)
+          expect(appliedLocales, ['fr']); // create doesn't apply anything when no cache
+          expect(client.currentLocale, 'fr');
+          expect(client.currentHash, 'fr-hash');
+        });
+
+        test('does not throw timeout when locale changed', () async {
+          final completers = <String, Completer<http.Response>>{
+            'de': Completer(),
+            'fr': Completer(),
+          };
+
+          final mockClient = MockClient((request) async {
+            final locale = request.url.pathSegments.last;
+            return completers[locale]!.future;
+          });
+
+          var errorThrown = false;
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {},
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+            timeout: const Duration(milliseconds: 50),
+          );
+
+          // Start slow 'de' request that will timeout
+          final deFuture = client.setLanguage('de').catchError((e) {
+            errorThrown = true;
+            return null;
+          });
+
+          // Small delay to ensure 'de' starts first
+          await Future.delayed(const Duration(milliseconds: 10));
+
+          // Switch to 'fr' before 'de' times out
+          final frFuture = client.setLanguage('fr');
+
+          // Complete 'fr' successfully
+          completers['fr']!.complete(http.Response(
+            jsonEncode({'hello': 'fr'}),
+            200,
+            headers: {'x-translation-hash': 'fr-hash'},
+          ));
+          await frFuture;
+
+          // Let 'de' timeout
+          await Future.delayed(const Duration(milliseconds: 100));
+
+          // Complete 'de' with timeout
+          completers['de']!.completeError(TimeoutException('timeout'));
+
+          try {
+            await deFuture;
+          } catch (_) {}
+
+          // No error should be thrown for the stale 'de' request
+          expect(errorThrown, false);
+          expect(client.currentLocale, 'fr');
+        });
+
+        test('does not throw format error when locale changed', () async {
+          final completers = <String, Completer<http.Response>>{
+            'de': Completer(),
+            'fr': Completer(),
+          };
+
+          final mockClient = MockClient((request) async {
+            final locale = request.url.pathSegments.last;
+            return completers[locale]!.future;
+          });
+
+          var errorThrown = false;
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {},
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+          );
+
+          // Start 'de' request
+          final deFuture = client.setLanguage('de').catchError((e) {
+            errorThrown = true;
+            return null;
+          });
+
+          // Small delay then switch to 'fr'
+          await Future.delayed(Duration.zero);
+          final frFuture = client.setLanguage('fr');
+
+          // Complete 'fr' successfully
+          completers['fr']!.complete(http.Response(
+            jsonEncode({'hello': 'fr'}),
+            200,
+            headers: {'x-translation-hash': 'fr-hash'},
+          ));
+          await frFuture;
+
+          // Complete 'de' with invalid JSON - should be ignored
+          completers['de']!.complete(http.Response('invalid json', 200));
+
+          try {
+            await deFuture;
+          } catch (_) {}
+
+          // No error should be thrown for the stale 'de' request
+          expect(errorThrown, false);
+          expect(client.currentLocale, 'fr');
+        });
+
+        test('handles multiple rapid locale switches', () async {
+          final responses = <String, Completer<http.Response>>{
+            'de': Completer(),
+            'fr': Completer(),
+            'es': Completer(),
+          };
+
+          final mockClient = MockClient((request) async {
+            final locale = request.url.pathSegments.last;
+            return responses[locale]!.future;
+          });
+
+          var lastAppliedLocale = '';
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {
+              lastAppliedLocale = locale;
+            },
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+          );
+
+          // Start all three requests
+          unawaited(client.setLanguage('de'));
+          unawaited(client.setLanguage('fr'));
+          unawaited(client.setLanguage('es'));
+
+          // Complete in reverse order
+          responses['de']!.complete(http.Response(
+            jsonEncode({'hello': 'de'}),
+            200,
+            headers: {'x-translation-hash': 'de-hash'},
+          ));
+
+          responses['fr']!.complete(http.Response(
+            jsonEncode({'hello': 'fr'}),
+            200,
+            headers: {'x-translation-hash': 'fr-hash'},
+          ));
+
+          responses['es']!.complete(http.Response(
+            jsonEncode({'hello': 'es'}),
+            200,
+            headers: {'x-translation-hash': 'es-hash'},
+          ));
+
+          // Wait for all to complete
+          await Future.delayed(const Duration(milliseconds: 50));
+
+          // Only 'es' should be applied (the last one)
+          expect(lastAppliedLocale, 'es');
+          expect(client.currentLocale, 'es');
+          expect(client.currentHash, 'es-hash');
+        });
+
+        test('still throws error when locale has not changed', () async {
+          final mockClient = MockClient((request) async {
+            return http.Response('Not Found', 404);
+          });
+
+          final client = await SlangCloudClient.create(
+            baseUrl: 'https://api.example.com',
+            applyTranslations: (locale, map, isFlatMap) async {},
+            setFallback: () async {},
+            storage: storage,
+            httpClient: mockClient,
+          );
+
+          expect(
+            () => client.setLanguage('de'),
+            throwsA(isA<SlangCloudException>()),
+          );
+        });
+      });
+    });
+
+    group('hasUpdate', () {
+      test('returns true when no cache exists', () async {
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {},
+          storage: storage,
+        );
+
+        expect(await client.hasUpdate(), true);
+      });
+
+      test('returns true when server hash differs', () async {
+        await storage.setCached(CachedTranslations(
+          locale: 'en',
+          hash: 'old-hash',
+          translations: {'hello': 'world'},
+        ));
+
+        final mockClient = MockClient((request) async {
+          return http.Response('', 200, headers: {
+            'x-translation-hash': 'new-hash',
+          });
+        });
+
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {},
+          storage: storage,
+          httpClient: mockClient,
+        );
+
+        expect(await client.hasUpdate(), true);
+      });
+
+      test('returns false when server hash matches', () async {
+        await storage.setCached(CachedTranslations(
+          locale: 'en',
+          hash: 'same-hash',
+          translations: {'hello': 'world'},
+        ));
+
+        final mockClient = MockClient((request) async {
+          return http.Response('', 200, headers: {
+            'x-translation-hash': 'same-hash',
+          });
+        });
+
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {},
+          storage: storage,
+          httpClient: mockClient,
+        );
+
+        expect(await client.hasUpdate(), false);
+      });
+    });
+
+    group('updateIfAvailable', () {
+      test('updates when available', () async {
+        await storage.setCached(CachedTranslations(
+          locale: 'en',
+          hash: 'old-hash',
+          translations: {'hello': 'world'},
+        ));
+
+        final translations = {'hello': 'updated'};
+        final mockClient = MockClient((request) async {
+          if (request.method == 'HEAD') {
+            return http.Response('', 200, headers: {
+              'x-translation-hash': 'new-hash',
             });
-          }),
+          }
+          return http.Response(
+            jsonEncode(translations),
+            200,
+            headers: {'x-translation-hash': 'new-hash'},
+          );
+        });
+
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {},
+          storage: storage,
+          httpClient: mockClient,
+        );
+
+        final updated = await client.updateIfAvailable();
+
+        expect(updated, true);
+        expect(client.currentHash, 'new-hash');
+      });
+
+      test('does not update when not available', () async {
+        await storage.setCached(CachedTranslations(
+          locale: 'en',
+          hash: 'same-hash',
+          translations: {'hello': 'world'},
+        ));
+
+        final mockClient = MockClient((request) async {
+          return http.Response('', 200, headers: {
+            'x-translation-hash': 'same-hash',
+          });
+        });
+
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {},
+          storage: storage,
+          httpClient: mockClient,
+        );
+
+        final updated = await client.updateIfAvailable();
+
+        expect(updated, false);
+      });
+
+      test('throws when no current locale', () async {
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {},
+          storage: storage,
         );
 
         expect(
-          () => client.downloadTranslation('en'),
-          throwsA(isA<SlangCloudInvalidResponseException>()),
+          () => client.updateIfAvailable(),
+          throwsA(isA<SlangCloudException>()),
         );
       });
+    });
 
-      test('does not validate JSON when Content-Type is not JSON', () async {
-        final client = SlangCloudClient(
-          config: config,
+    group('reload', () {
+      test('reloads from cache', () async {
+        final translations = {'hello': 'world'};
+        await storage.setCached(CachedTranslations(
+          locale: 'en',
+          hash: 'hash123',
+          translations: translations,
+        ));
+
+        var applyCount = 0;
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {
+            applyCount++;
+          },
+          setFallback: () async {},
           storage: storage,
-          client: MockClient((request) async {
-            return http.Response('plain text content', 200);
-          }),
         );
 
-        final result = await client.downloadTranslation('en');
-        expect(result, 'plain text content');
+        // Called once during create
+        expect(applyCount, 1);
+
+        await client.reload();
+
+        // Called again during reload
+        expect(applyCount, 2);
       });
+    });
 
-      test('throws SlangCloudServerException on 5xx error', () async {
-        final client = SlangCloudClient(
-          config: config,
+    group('clearCache', () {
+      test('clears cache and resets state', () async {
+        await storage.setCached(CachedTranslations(
+          locale: 'en',
+          hash: 'hash123',
+          translations: {'hello': 'world'},
+        ));
+
+        final client = await SlangCloudClient.create(
+          baseUrl: 'https://api.example.com',
+          applyTranslations: (locale, map, isFlatMap) async {},
+          setFallback: () async {},
           storage: storage,
-          client: MockClient((request) async {
-            return http.Response('Server Error', 500);
-          }),
         );
 
-        expect(
-          () => client.downloadTranslation('en'),
-          throwsA(
-            isA<SlangCloudServerException>().having(
-              (e) => e.statusCode,
-              'statusCode',
-              500,
+        expect(client.currentLocale, 'en');
+
+        await client.clearCache();
+
+        expect(client.currentLocale, isNull);
+        expect(client.currentHash, isNull);
+        expect(await storage.getCached(), isNull);
+      });
+    });
+  });
+
+  group('SlangCloudProvider', () {
+    testWidgets('provides client to descendants', (WidgetTester tester) async {
+      final client = await SlangCloudClient.create(
+        baseUrl: 'https://api.example.com',
+        applyTranslations: (locale, map, isFlatMap) async {},
+        setFallback: () async {},
+      );
+
+      SlangCloudClient? retrievedClient;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SlangCloudProvider(
+            client: client,
+            child: Builder(
+              builder: (context) {
+                retrievedClient = SlangCloudProvider.of(context);
+                return Container();
+              },
             ),
           ),
-        );
-      });
+        ),
+      );
 
-      test('includes response body in exception', () async {
-        final client = SlangCloudClient(
-          config: config,
-          storage: storage,
-          client: MockClient((request) async {
-            return http.Response('{"error": "details"}', 404);
-          }),
-        );
-
-        try {
-          await client.downloadTranslation('en');
-          fail('Expected exception');
-        } on SlangCloudException catch (e) {
-          expect(e.responseBody, '{"error": "details"}');
-        }
-      });
+      expect(retrievedClient, client);
     });
 
-    group('retry logic', () {
-      test('retries on network errors up to maxRetries times', () async {
-        var attemptCount = 0;
-        final client = SlangCloudClient(
-          config: const SlangCloudConfig(
-            baseUrl: 'https://api.example.com',
-            maxRetries: 2,
-            retryBaseDelay: Duration(milliseconds: 10),
+    testWidgets('throws when provider not found', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              expect(
+                () => SlangCloudProvider.of(context),
+                throwsA(isA<AssertionError>()),
+              );
+              return Container();
+            },
           ),
-          storage: storage,
-          client: _CountingMockClient((request) async {
-            attemptCount++;
-            throw SocketException('Connection refused');
-          }),
-        );
-
-        // Await completion before checking counter
-        try {
-          await client.checkForUpdate('en');
-          fail('Should have thrown');
-        } on SlangCloudNetworkException {
-          // Expected
-        }
-
-        // Initial attempt + 2 retries = 3 total
-        expect(attemptCount, 3);
-      });
-
-      test('retries on timeout up to maxRetries times', () async {
-        var attemptCount = 0;
-        final config = const SlangCloudConfig(
-          baseUrl: 'https://api.example.com',
-          maxRetries: 2,
-          retryBaseDelay: Duration(milliseconds: 10),
-          timeout: Duration(milliseconds: 1),
-        );
-
-        final client = SlangCloudClient(
-          config: config,
-          storage: storage,
-          client: _CountingMockClient((request) async {
-            attemptCount++;
-            await Future.delayed(Duration(milliseconds: 100));
-            return http.Response('', 200);
-          }),
-        );
-
-        // Await completion before checking counter
-        try {
-          await client.checkForUpdate('en');
-          fail('Should have thrown');
-        } on SlangCloudTimeoutException {
-          // Expected
-        }
-
-        // Should retry on timeout
-        expect(attemptCount, 3);
-      });
-
-      test('retries on 5xx server errors', () async {
-        var attemptCount = 0;
-        final client = SlangCloudClient(
-          config: const SlangCloudConfig(
-            baseUrl: 'https://api.example.com',
-            maxRetries: 2,
-            retryBaseDelay: Duration(milliseconds: 10),
-          ),
-          storage: storage,
-          client: _CountingMockClient((request) async {
-            attemptCount++;
-            return http.Response('Server Error', 503);
-          }),
-        );
-
-        // Await completion before checking counter
-        try {
-          await client.checkForUpdate('en');
-          fail('Should have thrown');
-        } on SlangCloudServerException {
-          // Expected
-        }
-
-        // Should retry on 5xx
-        expect(attemptCount, 3);
-      });
-
-      test('does not retry on 4xx client errors', () async {
-        var attemptCount = 0;
-        final client = SlangCloudClient(
-          config: const SlangCloudConfig(
-            baseUrl: 'https://api.example.com',
-            maxRetries: 3,
-            retryBaseDelay: Duration(milliseconds: 10),
-          ),
-          storage: storage,
-          client: _CountingMockClient((request) async {
-            attemptCount++;
-            return http.Response('Not Found', 404);
-          }),
-        );
-
-        // Await completion before checking counter
-        try {
-          await client.checkForUpdate('en');
-          fail('Should have thrown');
-        } on SlangCloudNotFoundException {
-          // Expected
-        }
-
-        // Should not retry on 4xx
-        expect(attemptCount, 1);
-      });
-
-      test('does not retry on hash mismatch', () async {
-        // This is tested through the controller, not the client directly
-        // as hash verification happens in the controller
-        expect(true, isTrue); // Placeholder
-      });
-
-      test('succeeds after retry', () async {
-        var attemptCount = 0;
-        final client = SlangCloudClient(
-          config: const SlangCloudConfig(
-            baseUrl: 'https://api.example.com',
-            maxRetries: 3,
-            retryBaseDelay: Duration(milliseconds: 10),
-          ),
-          storage: storage,
-          client: _CountingMockClient((request) async {
-            attemptCount++;
-            if (attemptCount < 3) {
-              throw SocketException('Connection refused');
-            }
-            return http.Response('', 200, headers: {'x-translation-hash': 'new_hash'});
-          }),
-        );
-
-        final result = await client.checkForUpdate('en');
-        expect(result, 'new_hash');
-        expect(attemptCount, 3);
-      });
+        ),
+      );
     });
 
-    group('different endpoints', () {
-      test('uses different endpoints for check and download', () async {
-        final config = const SlangCloudConfig(
-          baseUrl: 'https://api.example.com',
-          endpoint: '/api/translations/{locale}/check',
-          downloadEndpoint: '/api/translations/{locale}/download',
-        );
+    testWidgets('calls onError when provided', (WidgetTester tester) async {
+      final client = await SlangCloudClient.create(
+        baseUrl: 'https://api.example.com',
+        applyTranslations: (locale, map, isFlatMap) async {},
+        setFallback: () async {},
+      );
 
-        String? checkUrl;
-        String? downloadUrl;
+      SlangCloudException? capturedError;
 
-        final client = SlangCloudClient(
-          config: config,
-          storage: storage,
-          client: MockClient((request) async {
-            if (request.method == 'HEAD') {
-              checkUrl = request.url.toString();
-              return http.Response('', 200, headers: {'x-translation-hash': 'hash'});
-            } else if (request.method == 'GET') {
-              downloadUrl = request.url.toString();
-              return http.Response('{"test": "data"}', 200);
-            }
-            return http.Response('Not Found', 404);
-          }),
-        );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SlangCloudProvider(
+            client: client,
+            onError: (error) {
+              capturedError = error;
+            },
+            child: Builder(
+              builder: (context) {
+                // Simulate an error
+                SlangCloudProvider.reportError(
+                  context,
+                  SlangCloudException('Test error'),
+                );
+                return Container();
+              },
+            ),
+          ),
+        ),
+      );
 
-        await client.checkForUpdate('en');
-        await client.downloadTranslation('en');
-
-        expect(checkUrl, 'https://api.example.com/api/translations/en/check');
-        expect(downloadUrl, 'https://api.example.com/api/translations/en/download');
-      });
-
-      test('uses same endpoint when downloadEndpoint not specified', () async {
-        String? checkUrl;
-        String? downloadUrl;
-
-        final client = SlangCloudClient(
-          config: config,
-          storage: storage,
-          client: MockClient((request) async {
-            if (request.method == 'HEAD') {
-              checkUrl = request.url.toString();
-              return http.Response('', 200, headers: {'x-translation-hash': 'hash'});
-            } else if (request.method == 'GET') {
-              downloadUrl = request.url.toString();
-              return http.Response('{"test": "data"}', 200);
-            }
-            return http.Response('Not Found', 404);
-          }),
-        );
-
-        await client.checkForUpdate('en');
-        await client.downloadTranslation('en');
-
-        expect(checkUrl, 'https://api.example.com/translations/en');
-        expect(downloadUrl, 'https://api.example.com/translations/en');
-      });
+      expect(capturedError?.message, 'Test error');
     });
   });
 }
 
-// Mock client that throws SocketException
-class _MockClientWithSocketError extends http.BaseClient {
+/// A storage implementation that always throws on getCached
+class _FailingStorage implements SlangCloudStorage {
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    throw SocketException('Connection refused');
+  Future<CachedTranslations?> getCached() async {
+    throw Exception('Storage error');
   }
-}
-
-// Mock client that properly counts requests
-class _CountingMockClient extends http.BaseClient {
-  final Future<http.Response> Function(http.BaseRequest request) _handler;
-
-  _CountingMockClient(this._handler);
 
   @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final response = await _handler(request);
-    return http.StreamedResponse(
-      Stream.fromIterable([response.bodyBytes]),
-      response.statusCode,
-      headers: response.headers,
-    );
-  }
+  Future<void> setCached(CachedTranslations cached) async {}
+
+  @override
+  Future<void> clear() async {}
 }

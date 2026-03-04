@@ -1,33 +1,36 @@
-/// Abstract storage interface for caching translations and versions.
-/// Implement this using Hive, SharedPreferences, SecureStorage, or any other persistence layer.
+import 'cached_translations.dart';
+
+/// Abstract storage interface for caching translations.
+///
+/// Implementations handle serialization internally. For example:
+/// - In-memory: Store Map directly
+/// - SharedPreferences: Convert to JSON string
+/// - Hive: Store as object
 abstract class SlangCloudStorage {
-  /// Get the stored translation JSON for the given [locale].
-  Future<String?> getTranslation(String locale);
+  /// Get the cached translations with metadata.
+  Future<CachedTranslations?> getCached();
 
-  /// Save the translation JSON for the given [locale].
-  Future<void> setTranslation(String locale, String content);
+  /// Save the cached translations with metadata.
+  Future<void> setCached(CachedTranslations cached);
 
-  /// Get the stored version/hash for the given [locale].
-  Future<String?> getVersion(String locale);
-
-  /// Save the version/hash for the given [locale].
-  Future<void> setVersion(String locale, String version);
+  /// Clear all cached data.
+  Future<void> clear();
 }
 
 /// A simple in-memory storage implementation (useful for testing).
 class InMemorySlangCloudStorage implements SlangCloudStorage {
-  final Map<String, String> _translations = {};
-  final Map<String, String> _versions = {};
+  CachedTranslations? _data;
 
   @override
-  Future<String?> getTranslation(String locale) async => _translations[locale];
+  Future<CachedTranslations?> getCached() async => _data;
 
   @override
-  Future<void> setTranslation(String locale, String content) async => _translations[locale] = content;
+  Future<void> setCached(CachedTranslations cached) async {
+    _data = cached;
+  }
 
   @override
-  Future<String?> getVersion(String locale) async => _versions[locale];
-
-  @override
-  Future<void> setVersion(String locale, String version) async => _versions[locale] = version;
+  Future<void> clear() async {
+    _data = null;
+  }
 }

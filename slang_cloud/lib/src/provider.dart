@@ -1,154 +1,77 @@
-import 'dart:convert';
 import 'package:flutter/widgets.dart';
-import 'package:slang_cloud/src/controller.dart';
-import 'package:slang_cloud/src/model.dart';
+import 'client.dart';
+import 'exception.dart';
 
-/// A widget that provides access to the cloud translation controller.
+/// A widget that provides access to the cloud translation client.
 ///
-/// This widget listens to the controller's state changes and triggers
-/// the [onTranslationsReceived] callback when new translations are downloaded.
+/// This widget makes the [SlangCloudClient] available to the entire widget tree
+/// via [SlangCloudProvider.of].
 ///
 /// Usage:
 /// ```dart
-/// void main() {
-///   final controller = CloudTranslationController(
-///     config: SlangCloudConfig(baseUrl: 'https://api.example.com'),
+/// void main() async {
+///   final client = await SlangCloudClient.create(
+///     baseUrl: 'https://api.example.com',
+///     applyTranslations: (locale, map, isFlatMap) async {
+///       // Apply to slang
+///     },
+///     setFallback: () async {
+///       await LocaleSettings.setLocale(AppLocale.en);
+///     },
 ///   );
 ///
 ///   runApp(
-///     CloudTranslationProvider(
-///       controller: controller,
-///       onTranslationsReceived: (locale, translations) async {
-///         // Apply translations using your slang setup
-///       },
+///     SlangCloudProvider(
+///       client: client,
+///       onError: (e) => debugPrint('Error: $e'),
 ///       child: MyApp(),
 ///     ),
 ///   );
 /// }
 /// ```
-class CloudTranslationProvider extends StatefulWidget {
-  /// The controller instance created via [CloudTranslationController].
-  final CloudTranslationController controller;
+class SlangCloudProvider extends InheritedWidget {
+  /// The client instance created via [SlangCloudClient.create].
+  final SlangCloudClient client;
 
-  /// Called when new translations are received from the server.
-  ///
-  /// Use this callback to apply the translations using your slang setup:
-  /// ```dart
-  /// onTranslationsReceived: (locale, translations, isFlatMap) async {
-  ///   final appLocale = AppLocaleUtils.parse(locale);
-  ///   await LocaleSettings.instance.overrideTranslationsFromMap(
-  ///     locale: appLocale,
-  ///     map: translations,
-  ///     isFlatMap: isFlatMap,
-  ///   );
-  /// }
-  /// ```
-  final Future<void> Function(
-    String locale,
-    Map<String, dynamic> translations,
-    bool isFlatMap,
-  ) onTranslationsReceived;
+  /// Optional global error handler.
+  /// Called when errors occur in async operations.
+  final void Function(SlangCloudException error)? onError;
 
-  final Widget child;
-
-  const CloudTranslationProvider({
+  const SlangCloudProvider({
     super.key,
-    required this.controller,
-    required this.onTranslationsReceived,
-    required this.child,
-  });
-
-  /// Gets the controller instance from the widget tree.
-  ///
-  /// Use this to trigger actions like switching locales:
-  /// ```dart
-  /// try {
-  ///   await CloudTranslationProvider.of(context).setLanguage('de');
-  /// } catch (e) {
-  ///   // Handle error
-  /// }
-  /// ```
-  static CloudTranslationController of(BuildContext context) {
-    final provider = context.dependOnInheritedWidgetOfExactType<_CloudTranslationInherited>();
-    assert(provider != null, 'CloudTranslationProvider not found in widget tree');
-    return provider!.controller;
-  }
-
-  @override
-  State<CloudTranslationProvider> createState() => _CloudTranslationProviderState();
-}
-
-class _CloudTranslationProviderState extends State<CloudTranslationProvider> {
-  String? _lastAppliedLocale;
-  String? _lastAppliedHash;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_onControllerChanged);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_onControllerChanged);
-    super.dispose();
-  }
-
-  void _onControllerChanged() async {
-    final state = widget.controller.value;
-
-    // Apply when transitioning to Ready with a new locale OR new hash
-    if (state is CloudReady && state.currentLocale != null) {
-      final localeChanged = state.currentLocale != _lastAppliedLocale;
-      final hashChanged = state.currentHash != _lastAppliedHash;
-
-      if (localeChanged || hashChanged) {
-        await _applyTranslations(state.currentLocale!);
-        _lastAppliedLocale = state.currentLocale;
-        _lastAppliedHash = state.currentHash;
-      }
-    }
-  }
-
-  Future<void> _applyTranslations(String locale) async {
-    try {
-      final jsonStr = await widget.controller.getCachedTranslation(locale);
-      if (jsonStr != null) {
-        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
-        await widget.onTranslationsReceived(
-          locale,
-          map,
-          widget.controller.config.isFlatMap,
-        );
-      }
-    } catch (e) {
-      debugPrint('SlangCloud: Failed to apply translations: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _CloudTranslationInherited(
-      controller: widget.controller,
-      state: widget.controller.value,
-      child: widget.child,
-    );
-  }
-}
-
-/// Inherited widget that provides the controller to descendants.
-class _CloudTranslationInherited extends InheritedWidget {
-  final CloudTranslationController controller;
-  final CloudState state;
-
-  const _CloudTranslationInherited({
-    required this.controller,
-    required this.state,
+    required this.client,
+    this.onError,
     required super.child,
   });
 
-  @override
-  bool updateShouldNotify(_CloudTranslationInherited oldWidget) {
-    return state != oldWidget.state;
+  /// Gets the client instance from the widget tree.
+  ///
+  /// Use this to access the client anywhere in the app:
+  /// ```dart
+  /// final client = SlangCloudProvider.of(context);
+  /// await client.setLanguage('de');
+  /// ```
+  static SlangCloudClient of(BuildContext context) {
+    final provider = context.dependOnInheritedWidgetOfExactType<SlangCloudProvider>();
+    assert(provider != null, 'SlangCloudProvider not found in widget tree');
+    return provider!.client;
   }
+
+  /// Reports an error to the global error handler if one is set.
+  ///
+  /// This can be called from widgets to report errors:
+  /// ```dart
+  /// try {
+  ///   await client.setLanguage('de');
+  /// } on SlangCloudException catch (e) {
+  ///   SlangCloudProvider.reportError(context, e);
+  /// }
+  /// ```
+  static void reportError(BuildContext context, SlangCloudException error) {
+    final provider = context.dependOnInheritedWidgetOfExactType<SlangCloudProvider>();
+    provider?.onError?.call(error);
+  }
+
+  @override
+  bool updateShouldNotify(SlangCloudProvider oldWidget) => false;
 }
