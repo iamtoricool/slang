@@ -66,7 +66,7 @@ Future<SlangCloudClient> createStaticFileClient(
 ) async {
   return SlangCloudClient.create(
     baseUrl: 'http://10.0.2.2:8000',
-    pathTemplate: '/public/translations/{locale}.json',
+    pathTemplate: '/translations/{locale}.json',
     hashHeader: 'X-Translation-Hash',
     isFlatMap: false,
     storage: storage,

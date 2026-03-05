@@ -17,8 +17,11 @@ Future<void> main() async {
   final storage = await SharedPreferencesSlangCloudStorage.create();
 
   // Pre-initialize cloud client (loads cached translations from storage)
-  // Change this to createHonoClient(storage) for Hono server
-  final client = await createLaravelClient(storage);
+  // Options:
+  // - createLaravelClient(storage): Uses API endpoint with hash header
+  // - createHonoClient(storage): Uses Hono server API endpoint
+  // - createStaticFileClient(storage): Uses static JSON files from public/translations/
+  final client = await createStaticFileClient(storage);
 
   runApp(
     ProviderScope(
