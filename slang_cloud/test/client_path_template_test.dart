@@ -1,8 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 
 /// Replicates the _buildUrl logic from SlangCloudClient for testing
+/// The locale is URL-encoded to prevent path traversal attacks.
 String buildUrl(String baseUrl, String pathTemplate, String locale) {
-  final path = pathTemplate.replaceAll('{locale}', locale);
+  final path = pathTemplate.replaceAll('{locale}', Uri.encodeComponent(locale));
   // Ensure baseUrl doesn't have trailing slash and path starts with slash
   final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
   final normalizedPath = path.startsWith('/') ? path : '/$path';
@@ -318,6 +319,60 @@ void main() {
         expect(
           buildUrl('https://cdn.example.com', '/assets/translations/{locale}.json', 'fr'),
           equals('https://cdn.example.com/assets/translations/fr.json'),
+        );
+      });
+    });
+
+    group('security - path traversal prevention', () {
+      test('should encode path traversal attempts', () {
+        // Path traversal attempts should be encoded, not executed
+        expect(
+          buildUrl('http://api.example.com', '/translations/{locale}', '../../../etc/passwd'),
+          equals('http://api.example.com/translations/..%2F..%2F..%2Fetc%2Fpasswd'),
+        );
+      });
+
+      test('should encode query parameter injection attempts', () {
+        // Query parameter injection should be encoded
+        expect(
+          buildUrl('http://api.example.com', '/translations/{locale}', 'en?evil=true'),
+          equals('http://api.example.com/translations/en%3Fevil%3Dtrue'),
+        );
+      });
+
+      test('should encode fragment injection attempts', () {
+        // Fragment injection should be encoded
+        expect(
+          buildUrl('http://api.example.com', '/translations/{locale}', 'en#malicious'),
+          equals('http://api.example.com/translations/en%23malicious'),
+        );
+      });
+
+      test('should encode special characters in locale', () {
+        // Various special characters should be encoded
+        expect(
+          buildUrl('http://api.example.com', '/translations/{locale}', 'en&cmd=rm'),
+          equals('http://api.example.com/translations/en%26cmd%3Drm'),
+        );
+        expect(
+          buildUrl('http://api.example.com', '/translations/{locale}', 'en@domain.com'),
+          equals('http://api.example.com/translations/en%40domain.com'),
+        );
+      });
+
+      test('should handle double encoding safely', () {
+        // Already encoded input should be double-encoded (safe behavior)
+        expect(
+          buildUrl('http://api.example.com', '/translations/{locale}', 'en%20test'),
+          equals('http://api.example.com/translations/en%2520test'),
+        );
+      });
+
+      test('should handle null bytes safely', () {
+        // Null bytes should be encoded
+        expect(
+          buildUrl('http://api.example.com', '/translations/{locale}', 'en\x00test'),
+          equals('http://api.example.com/translations/en%00test'),
         );
       });
     });

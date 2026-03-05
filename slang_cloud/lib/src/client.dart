@@ -60,8 +60,9 @@ class SlangCloudClient {
   }) : _client = client ?? http.Client();
 
   /// Builds the full URL by replacing {locale} in the path template.
+  /// The locale is URL-encoded to prevent path traversal attacks.
   String _buildUrl(String locale) {
-    final path = pathTemplate.replaceAll('{locale}', locale);
+    final path = pathTemplate.replaceAll('{locale}', Uri.encodeComponent(locale));
     // Ensure baseUrl doesn't have trailing slash and path starts with slash
     final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
     final normalizedPath = path.startsWith('/') ? path : '/$path';

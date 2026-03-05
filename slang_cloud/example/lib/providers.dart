@@ -71,7 +71,8 @@ Future<SlangCloudClient> createStaticFileClient(
     isFlatMap: false,
     storage: storage,
     // Compute hash from content for static files (no hash header)
-    computeHash: (body) => md5.convert(utf8.encode(body)).toString(),
+    // Using SHA256 for cryptographic strength (industry best practice)
+    computeHash: (body) => sha256.convert(utf8.encode(body)).toString(),
     applyTranslations: (locale, translations, isFlatMap) async {
       await LocaleSettings.instance.overrideTranslationsFromMap(
         locale: AppLocaleUtils.parse(locale),
