@@ -20,15 +20,22 @@ typedef ApplyTranslationsCallback = Future<void> Function(
 /// Called when cloud translations fail to load.
 typedef SetFallbackCallback = Future<void> Function();
 
+/// Callback to compute a hash from response content.
+/// Used when the server doesn't provide a hash header (e.g., static files).
+/// Return null to skip hash-based caching for this response.
+typedef ComputeHashCallback = String? Function(String responseBody);
+
 /// Client for downloading and managing cloud translations.
 class SlangCloudClient {
   final String baseUrl;
+  final String pathTemplate;
   final SlangCloudStorage storage;
   final String hashHeader;
   final Duration timeout;
   final bool isFlatMap;
   final ApplyTranslationsCallback applyTranslations;
   final SetFallbackCallback setFallback;
+  final ComputeHashCallback? computeHash;
   final http.Client _client;
 
   // In-memory cache
@@ -41,34 +48,63 @@ class SlangCloudClient {
 
   SlangCloudClient._({
     required this.baseUrl,
+    required this.pathTemplate,
     required this.storage,
     required this.hashHeader,
     required this.timeout,
     required this.isFlatMap,
     required this.applyTranslations,
     required this.setFallback,
+    this.computeHash,
     http.Client? client,
   }) : _client = client ?? http.Client();
 
+  /// Builds the full URL by replacing {locale} in the path template.
+  /// The locale is URL-encoded to prevent path traversal attacks.
+  String _buildUrl(String locale) {
+    final path = pathTemplate.replaceAll('{locale}', Uri.encodeComponent(locale));
+    // Ensure baseUrl doesn't have trailing slash and path starts with slash
+    final base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    final normalizedPath = path.startsWith('/') ? path : '/$path';
+    return '$base$normalizedPath';
+  }
+
   /// Factory constructor that initializes and loads cached translations.
+  ///
+  /// [baseUrl] - The base URL of the translation server (e.g., 'https://api.example.com')
+  /// [pathTemplate] - URL path template with {locale} placeholder (default: '/translations/{locale}')
+  /// [applyTranslations] - Callback to apply downloaded translations to your app
+  /// [setFallback] - Callback to set fallback locale when cloud translations fail
+  /// [storage] - Storage implementation for caching (default: in-memory)
+  /// [hashHeader] - Header name for translation hash (default: 'X-Translation-Hash')
+  /// [timeout] - Request timeout duration (default: 30 seconds)
+  /// [isFlatMap] - Whether translations use flat keys like 'main.title'
+  /// [httpClient] - Custom http client instance
+  /// [computeHash] - Optional callback to compute hash from response body.
+  ///   Use this for static files when the server doesn't provide a hash header.
+  ///   Return null to skip hash-based caching.
   static Future<SlangCloudClient> create({
     required String baseUrl,
     required ApplyTranslationsCallback applyTranslations,
     required SetFallbackCallback setFallback,
+    String pathTemplate = '/translations/{locale}',
     SlangCloudStorage? storage,
     String hashHeader = 'X-Translation-Hash',
     Duration timeout = const Duration(seconds: 30),
     bool isFlatMap = false,
     http.Client? httpClient,
+    ComputeHashCallback? computeHash,
   }) async {
     final client = SlangCloudClient._(
       baseUrl: baseUrl,
+      pathTemplate: pathTemplate,
       storage: storage ?? InMemorySlangCloudStorage(),
       hashHeader: hashHeader,
       timeout: timeout,
       isFlatMap: isFlatMap,
       applyTranslations: applyTranslations,
       setFallback: setFallback,
+      computeHash: computeHash,
       client: httpClient,
     );
 
@@ -117,7 +153,7 @@ class SlangCloudClient {
     bool isStale() => _requestId != requestId;
 
     try {
-      final response = await _client.get(Uri.parse('$baseUrl/translations/$locale')).timeout(timeout);
+      final response = await _client.get(Uri.parse(_buildUrl(locale))).timeout(timeout);
 
       // Ignore if user switched to different locale while downloading
       if (isStale()) {
@@ -125,8 +161,11 @@ class SlangCloudClient {
       }
 
       if (response.statusCode == 200) {
-        final serverHash = response.headers[hashHeader.toLowerCase()] ?? '';
-        final map = jsonDecode(response.body) as Map<String, dynamic>;
+        final body = response.body;
+        // Use header hash if available, otherwise use computeHash callback if provided
+        // This supports both API endpoints with hash headers and static JSON files
+        final serverHash = response.headers[hashHeader.toLowerCase()] ?? computeHash?.call(body) ?? '';
+        final map = jsonDecode(body) as Map<String, dynamic>;
 
         final cached = CachedTranslations(
           locale: locale,
@@ -161,15 +200,22 @@ class SlangCloudClient {
   }
 
   /// Check if an update is available for the current locale.
+  ///
+  /// Always uses the configured hashHeader. This is mandatory per backend spec.
+  /// Returns true if the hash header is missing or differs from cached hash.
   Future<bool> hasUpdate() async {
     if (_currentLocale == null || _currentHash == null) return true;
 
     try {
-      final response = await _client.head(Uri.parse('$baseUrl/translations/$_currentLocale')).timeout(timeout);
+      final response = await _client.head(Uri.parse(_buildUrl(_currentLocale!))).timeout(timeout);
 
       if (response.statusCode == 200) {
         final serverHash = response.headers[hashHeader.toLowerCase()];
-        return serverHash != _currentHash;
+        if (serverHash != null) {
+          return serverHash != _currentHash;
+        }
+        // Hash header missing, assume update needed
+        return true;
       }
       return true;
     } catch (e) {
@@ -216,5 +262,13 @@ class SlangCloudClient {
     await storage.clear();
     _currentLocale = null;
     _currentHash = null;
+  }
+
+  /// Dispose the client and release resources.
+  ///
+  /// Closes the underlying HTTP client. After calling dispose,
+  /// the client should not be used anymore.
+  void dispose() {
+    _client.close();
   }
 }
