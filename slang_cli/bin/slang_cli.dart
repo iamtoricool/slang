@@ -1,0 +1,344 @@
+import 'dart:io';
+
+import 'package:slang/src/builder/builder/slang_file_collection_builder.dart';
+import 'package:slang/src/builder/model/raw_config.dart';
+import 'package:slang/src/builder/model/slang_file_collection.dart';
+import 'package:slang/src/builder/utils/path_utils.dart';
+import 'package:slang_cli/src/runner/analyze.dart';
+import 'package:slang_cli/src/runner/apply.dart';
+import 'package:slang_cli/src/runner/clean.dart';
+import 'package:slang_cli/src/runner/configure.dart';
+import 'package:slang_cli/src/runner/edit.dart';
+import 'package:slang_cli/src/runner/generate.dart';
+import 'package:slang_cli/src/runner/help.dart';
+import 'package:slang_cli/src/runner/migrate.dart';
+import 'package:slang_cli/src/runner/normalize.dart';
+import 'package:slang_cli/src/runner/stats.dart';
+import 'package:slang_cli/src/runner/wip.dart';
+import 'package:slang/src/utils/log.dart' as log;
+import 'package:slang/src/utils/stopwatch.dart';
+import 'package:watcher/watcher.dart';
+
+/// Determines what the runner will do
+enum RunnerMode {
+  generate, // default
+  watch, // generate on change
+  configure, // update configuration files
+  stats, // print translation stats
+  analyze, // generate missing translations
+  apply, // apply translations from analyze
+  migrate, // migration tool
+  edit, // edit translations
+  outdated, // add 'OUTDATED' modifier to secondary locales
+  add, // add a translation
+  clean, // clean unused translations
+  normalize, // normalize translations according to base locale
+  wip, // access the wip commands
+}
+
+/// To run this:
+/// -> dart run slang
+///
+/// Scans translation files and builds the dart file.
+/// This is usually faster than the build_runner implementation.
+void main(List<String> arguments) async {
+  final RunnerMode mode;
+  log.Level logLevel = log.Level.normal;
+
+  if (arguments.isNotEmpty) {
+    if (const {'-h', '--help', 'help'}.contains(arguments[0])) {
+      printHelp();
+      return;
+    }
+
+    switch (arguments[0]) {
+      case 'watch':
+        mode = RunnerMode.watch;
+        break;
+      case 'configure':
+        mode = RunnerMode.configure;
+        break;
+      case 'stats':
+        mode = RunnerMode.stats;
+        break;
+      case 'analyze':
+        mode = RunnerMode.analyze;
+        break;
+      case 'apply':
+        mode = RunnerMode.apply;
+        break;
+      case 'migrate':
+        mode = RunnerMode.migrate;
+        break;
+      case 'edit':
+        mode = RunnerMode.edit;
+        break;
+      case 'outdated':
+        mode = RunnerMode.outdated;
+        break;
+      case 'add':
+        mode = RunnerMode.add;
+        break;
+      case 'clean':
+        mode = RunnerMode.clean;
+        break;
+      case 'normalize':
+        mode = RunnerMode.normalize;
+        break;
+      case 'wip':
+        mode = RunnerMode.wip;
+        break;
+      default:
+        mode = RunnerMode.generate;
+    }
+
+    for (final arg in arguments) {
+      if (arg == '-v' || arg == '--verbose') {
+        logLevel = log.Level.verbose;
+      }
+    }
+  } else {
+    mode = RunnerMode.generate;
+  }
+
+  log.setLevel(logLevel);
+
+  final verbose = logLevel == log.Level.verbose;
+
+  switch (mode) {
+    case RunnerMode.generate:
+    case RunnerMode.watch:
+      log.info('Generating translations...\n');
+      break;
+    case RunnerMode.configure:
+      log.info('Configuring...\n');
+      break;
+    case RunnerMode.stats:
+    case RunnerMode.analyze:
+      log.info('Scanning translations...\n');
+      break;
+    case RunnerMode.apply:
+      log.info('Applying translations...\n');
+      break;
+    case RunnerMode.migrate:
+      break;
+    case RunnerMode.edit:
+      break;
+    case RunnerMode.outdated:
+      break;
+    case RunnerMode.add:
+      log.info('Adding translation...');
+      break;
+    case RunnerMode.clean:
+      log.info('Removing unused translations...\n');
+      break;
+    case RunnerMode.normalize:
+      log.info('Normalizing translations...\n');
+      break;
+    case RunnerMode.wip:
+      break;
+  }
+
+  final stopwatch = Stopwatch();
+  if (mode != RunnerMode.watch) {
+    // only run stopwatch if generating once
+    stopwatch.start();
+  }
+
+  final fileCollection =
+      SlangFileCollectionBuilder.readFromFileSystem(verbose: verbose);
+
+  // the actual runner
+  final filteredArguments = arguments.skip(1).toList();
+  switch (mode) {
+    case RunnerMode.apply:
+      await runApplyTranslations(
+        fileCollection: fileCollection,
+        arguments: filteredArguments,
+      );
+      break;
+    case RunnerMode.watch:
+      await watchTranslations(fileCollection.config);
+      break;
+    case RunnerMode.configure:
+      runConfigure(
+        fileCollection,
+        arguments: filteredArguments,
+      );
+      break;
+    case RunnerMode.stats:
+      await runStats(
+        fileCollection: fileCollection,
+        stopwatch: stopwatch,
+      );
+      break;
+    case RunnerMode.analyze:
+      await runAnalyzeTranslations(
+        fileCollection: fileCollection,
+        arguments: filteredArguments,
+        stopwatch: stopwatch,
+      );
+      break;
+    case RunnerMode.generate:
+      await generateTranslations(
+        fileCollection: fileCollection,
+        stopwatch: stopwatch,
+      );
+      break;
+    case RunnerMode.migrate:
+      await runMigrate(filteredArguments);
+      break;
+    case RunnerMode.edit:
+      await runEdit(
+        fileCollection: fileCollection,
+        arguments: filteredArguments,
+      );
+      break;
+    case RunnerMode.outdated:
+      await runEdit(
+        fileCollection: fileCollection,
+        arguments: arguments,
+      );
+      break;
+    case RunnerMode.add:
+      await runEdit(
+        fileCollection: fileCollection,
+        arguments: arguments,
+      );
+      break;
+    case RunnerMode.clean:
+      await runClean(
+        fileCollection: fileCollection,
+        arguments: arguments,
+      );
+      break;
+    case RunnerMode.normalize:
+      await runNormalize(
+        fileCollection: fileCollection,
+        arguments: arguments,
+      );
+      break;
+    case RunnerMode.wip:
+      final changed = await runWip(
+        fileCollection: fileCollection,
+        arguments: filteredArguments,
+      );
+      if (changed) {
+        if (filteredArguments
+            .any((element) => element.startsWith('--source-dirs='))) {
+          log.info('No regeneration as --source-dirs is not supported yet');
+          return;
+        }
+        log.info('Changes has been applied! Regenerating Dart files...');
+        main(const []);
+      }
+      break;
+  }
+}
+
+Future<void> watchTranslations(RawConfig config) async {
+  final inputDirectoryPath = config.inputDirectory;
+  if (inputDirectoryPath == null) {
+    log.error('Please set input_directory in build.yaml or slang.yaml.');
+    return;
+  }
+
+  final inputDirectory = Directory(inputDirectoryPath);
+  final stream = Watcher(inputDirectoryPath).events;
+
+  log.info('Listening to changes in $inputDirectoryPath');
+  _generateTranslationsFromWatch(
+    config: config,
+    inputDirectory: inputDirectory,
+    counter: 1,
+    fileName: '',
+  );
+  int counter = 2;
+  await for (final event in stream) {
+    if (event.path.endsWith(config.inputFilePattern)) {
+      _generateTranslationsFromWatch(
+        config: config,
+        inputDirectory: inputDirectory,
+        counter: counter,
+        fileName: event.path.getFileName(),
+      );
+      counter++;
+    }
+  }
+}
+
+Future<void> _generateTranslationsFromWatch({
+  required RawConfig config,
+  required Directory inputDirectory,
+  required int counter,
+  required String fileName,
+}) async {
+  final stopwatch = Stopwatch()..start();
+  _printDynamicLastLine('\r[$currentTime] $_yellow#$counter Generating...');
+
+  final newFiles = inputDirectory
+      .listSync(recursive: true)
+      .where(
+          (item) => item is File && item.path.endsWith(config.inputFilePattern))
+      .map((f) => PlainTranslationFile(
+            path: f.path.replaceAll('\\', '/'),
+            read: () => File(f.path).readAsString(),
+          ))
+      .toList();
+
+  bool success = true;
+  try {
+    await generateTranslations(
+      fileCollection: SlangFileCollectionBuilder.fromFileModel(
+        config: config,
+        files: newFiles,
+      ),
+    );
+  } catch (e) {
+    success = false;
+    log.error('\n${e.toString()}');
+    _printDynamicLastLine(
+      '\r[$currentTime] $_red#$counter Error ${stopwatch.elapsedSeconds}',
+    );
+  }
+
+  if (success) {
+    if (counter == 1) {
+      _printDynamicLastLine(
+          '\r[$currentTime] $_green#1 Init ${stopwatch.elapsedSeconds}');
+    } else {
+      _printDynamicLastLine(
+        '\r[$currentTime] $_green#$counter Update $fileName ${stopwatch.elapsedSeconds}',
+      );
+    }
+  }
+}
+
+// returns current time in HH:mm:ss
+String get currentTime {
+  final now = DateTime.now();
+  return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+}
+
+extension on String {
+  /// converts /some/path/file.json to file.json
+  String getFileName() {
+    return PathUtils.getFileName(this);
+  }
+}
+
+String? _lastPrint;
+
+void _printDynamicLastLine(String output) {
+  if (_lastPrint == null) {
+    stdout.write('\r$output$_reset');
+  } else {
+    stdout.write('\r${output.padRight(_lastPrint!.length, ' ')}$_reset');
+  }
+  _lastPrint = output;
+}
+
+const _green = '\x1B[32m';
+const _yellow = '\x1B[33m';
+const _red = '\x1B[31m';
+const _reset = '\x1B[0m';
