@@ -3,6 +3,7 @@ description: CLI for slang, a type-safe i18n library for Dart and Flutter.
 version: 0.1.0
 repository: https://codeberg.org/Tienisto/slang
 homepage: https://pub.dev/packages/slang
+publish_to: none
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -16,7 +17,11 @@ dependencies:
   file: ^7.0.0
   glob: ^2.0.0
   path: ^1.8.0
-  slang: ^4.0.0
+  slang:
+    git:
+      url: https://github.com/iamtoricool/slang.git
+      ref: stable
+      path: slang
   watcher: ^1.0.2
   yaml: ^3.1.0
 
