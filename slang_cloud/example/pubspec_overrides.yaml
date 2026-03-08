@@ -3,3 +3,5 @@ dependency_overrides:
     path: ../../slang
   slang_cloud:
     path: ../
+  slang_flutter:
+    path: ../../slang_flutter

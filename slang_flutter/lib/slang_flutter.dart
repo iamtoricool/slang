@@ -3,6 +3,8 @@ import 'package:slang/slang.dart';
 import 'package:slang/generated.dart';
 import 'package:slang/overrides.dart';
 // ignore: implementation_imports
+import 'package:slang/src/builder/model/node.dart';
+// ignore: implementation_imports
 import 'package:slang/src/builder/model/pluralization.dart';
 
 export 'package:slang/slang.dart';
