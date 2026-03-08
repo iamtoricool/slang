@@ -1,5 +1,5 @@
 import 'package:slang/overrides.dart';
-import 'package:slang_cli/src/runner/wip.dart';
+import 'package:slang_cli/src/commands/wip.dart';
 import 'package:test/test.dart';
 
 void main() {

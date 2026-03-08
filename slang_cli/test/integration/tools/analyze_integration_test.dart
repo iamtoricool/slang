@@ -5,7 +5,7 @@ import 'package:slang/src/builder/model/i18n_data.dart';
 import 'package:slang/src/builder/model/i18n_locale.dart';
 import 'package:slang/src/builder/model/raw_config.dart';
 import 'package:slang/src/builder/model/translation_map.dart';
-import 'package:slang_cli/src/runner/analyze.dart';
+import 'package:slang_cli/src/commands/analyze.dart';
 import 'package:test/test.dart';
 
 import '../../util/setup.dart';

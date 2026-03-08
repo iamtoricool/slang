@@ -10,8 +10,8 @@ import 'package:slang/src/builder/model/slang_file_collection.dart';
 import 'package:slang/src/builder/utils/file_utils.dart';
 import 'package:slang/src/builder/utils/node_utils.dart';
 import 'package:slang/src/builder/utils/path_utils.dart';
-import 'package:slang_cli/src/runner/analyze.dart';
-import 'package:slang_cli/src/runner/utils/read_analysis_file.dart';
+import 'package:slang_cli/src/commands/analyze.dart';
+import 'package:slang_cli/src/commands/utils/read_analysis_file.dart';
 import 'package:slang/src/utils/log.dart' as log;
 
 const _supportedFiles = [FileType.json, FileType.yaml];

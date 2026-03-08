@@ -10,8 +10,8 @@ import 'package:slang/src/builder/utils/map_utils.dart';
 import 'package:slang/src/builder/utils/path_utils.dart';
 import 'package:slang/src/builder/utils/string_extensions.dart';
 import 'package:slang/src/builder/utils/string_interpolation_extensions.dart';
-import 'package:slang_cli/src/runner/apply.dart';
-import 'package:slang_cli/src/runner/utils/dart_analysis_ext.dart';
+import 'package:slang_cli/src/commands/apply.dart';
+import 'package:slang_cli/src/commands/utils/dart_analysis_ext.dart';
 import 'package:slang/src/utils/log.dart' as log;
 
 const _supportedFiles = [FileType.json, FileType.yaml];

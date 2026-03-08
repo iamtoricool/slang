@@ -3,7 +3,7 @@ import 'package:slang/src/builder/generator_facade.dart';
 import 'package:slang/src/builder/model/slang_file_collection.dart';
 import 'package:slang/src/builder/utils/file_utils.dart';
 import 'package:slang/src/builder/utils/path_utils.dart';
-import 'package:slang_cli/src/runner/utils/format.dart';
+import 'package:slang_cli/src/commands/utils/format.dart';
 import 'package:slang/src/utils/log.dart' as log;
 import 'package:slang/src/utils/stopwatch.dart';
 

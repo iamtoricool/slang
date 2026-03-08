@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:slang_cli/src/runner/translation_usage_analyzer.dart';
+import 'package:slang_cli/src/analyzer/translation_usage_analyzer.dart';
 import 'package:test/test.dart';
 
 /// Edge case tests for TranslationUsageAnalyzer

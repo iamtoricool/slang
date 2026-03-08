@@ -1,4 +1,4 @@
-import 'package:slang_cli/src/runner/migrate_arb.dart';
+import 'package:slang_cli/src/commands/migrate_arb.dart';
 
 Future<void> runMigrate(List<String> arguments) async {
   if (arguments.length != 3) {

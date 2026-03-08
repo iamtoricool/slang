@@ -15,7 +15,7 @@ import 'package:slang/src/builder/utils/node_utils.dart';
 import 'package:slang/src/builder/utils/path_utils.dart';
 import 'package:slang/src/utils/log.dart' as log;
 import 'package:slang/src/utils/stopwatch.dart';
-import 'package:slang_cli/src/runner/translation_usage_analyzer.dart';
+import 'package:slang_cli/src/analyzer/translation_usage_analyzer.dart';
 
 final _setEquality = SetEquality();
 

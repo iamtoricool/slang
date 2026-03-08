@@ -2,7 +2,7 @@ import 'package:slang/src/builder/model/i18n_locale.dart';
 import 'package:slang/src/builder/model/raw_config.dart';
 import 'package:slang/src/builder/model/slang_file_collection.dart';
 import 'package:slang/src/builder/utils/regex_utils.dart';
-import 'package:slang_cli/src/runner/configure.dart';
+import 'package:slang_cli/src/commands/configure.dart';
 import 'package:test/test.dart';
 
 void main() {

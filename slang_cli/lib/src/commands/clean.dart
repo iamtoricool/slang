@@ -4,7 +4,7 @@ import 'package:slang/src/builder/model/i18n_locale.dart';
 import 'package:slang/src/builder/model/slang_file_collection.dart';
 import 'package:slang/src/builder/utils/file_utils.dart';
 import 'package:slang/src/builder/utils/map_utils.dart';
-import 'package:slang_cli/src/runner/utils/read_analysis_file.dart';
+import 'package:slang_cli/src/commands/utils/read_analysis_file.dart';
 import 'package:slang/src/utils/log.dart' as log;
 
 /// Reads the "_unused_translations" file and removes the specified keys
